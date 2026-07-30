@@ -125,10 +125,20 @@
   .cell .k{font-family:var(--mono);font-size:9.5px;letter-spacing:.16em;text-transform:uppercase;color:#5a6478}
   .cell .v{font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:19px;margin-top:5px}
 
+  .camwrap{position:relative;margin-top:18px}
   #cam{
     width:100%;max-height:34vh;object-fit:cover;background:#000;
-    border:1px solid var(--line);border-radius:3px;margin-top:18px;display:block;
+    border:1px solid var(--line);border-radius:3px;display:block;
   }
+  #frameBox{
+    position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+    aspect-ratio:1;height:100%;pointer-events:none;
+    border:1px solid rgba(79,214,224,.55);border-radius:2px;
+  }
+  .tune{margin-top:14px;font-family:var(--mono);font-size:12px}
+  .tune .band{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:8px}
+  .tune .lbl{color:#4d5666;letter-spacing:.16em;text-transform:uppercase;font-size:10px;width:76px;flex:none}
+  .tune .chip[aria-pressed="true"]{border-color:var(--sense);color:var(--sense);background:rgba(79,214,224,.08)}
   .actions{display:flex;gap:8px;margin-top:14px}
   .btn{
     flex:1;padding:13px;border:1px solid var(--line);border-radius:3px;
@@ -227,9 +237,15 @@
         <div class="cell"><div class="k">Capture fps</div><div class="v" id="mCam">—</div></div>
         <div class="cell"><div class="k">Decodes / s</div><div class="v" id="mDec">—</div></div>
         <div class="cell"><div class="k">Capture size</div><div class="v" id="mRes">—</div></div>
+        <div class="cell"><div class="k">Decoder</div><div class="v" id="mMode">—</div></div>
+        <div class="cell"><div class="k">Scan px</div><div class="v" id="mScan">—</div></div>
+        <div class="cell"><div class="k">Total hits</div><div class="v" id="mHits">0</div></div>
       </div>
 
-      <video id="cam" playsinline muted autoplay></video>
+      <div class="camwrap">
+        <video id="cam" playsinline muted autoplay></video>
+        <div id="frameBox"></div>
+      </div>
       <div class="actions">
         <button class="btn" id="btnReset">Reset counters</button>
         <button class="btn" id="btnStop">Stop camera</button>
@@ -238,6 +254,10 @@
 
     <div id="rxIdle">
       <div class="notice" id="rxNote"></div>
+      <div class="tune" id="tune" hidden>
+        <div class="band"><span class="lbl">Workers</span><span id="workerChips"></span></div>
+        <div class="band"><span class="lbl">Scan area</span><span id="cropChips"></span></div>
+      </div>
       <div class="actions"><button class="btn primary" id="btnStart">Start camera</button></div>
     </div>
   </div>
@@ -497,11 +517,13 @@ setInterval(() => {
    ============================================================ */
 const rx = {
   stream: null, detector: null, gen: 0, busy: false, on: false,
+  mode: null, pool: null, jsQR: null, workers: 2, crop: 1.0,
   session: null, seen: new Set(), minSeq: Infinity, maxSeq: -1,
   bytes: 0, hits: 0, dupes: 0, camFrames: 0, decodes: 0,
   t0: 0, recent: [], history: [], lastSample: 0, lastCam: 0, lastDec: 0,
   camFps: 0, decFps: 0,
 };
+const MAX_SCAN_SIDE = 800;   // above this jsQR costs more than it gains
 const video = $('#cam');
 const spark = $('#spark');
 const sctxSpark = spark.getContext('2d');
@@ -544,42 +566,164 @@ async function openCamera() {
   throw last;
 }
 
-async function startReceiver() {
+/* ---------- decode backend B: jsQR in a pool of blob workers ---------- */
+const WORKER_SRC = `
+  let up = false;
+  try { importScripts('https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js'); up = true; }
+  catch (e) { postMessage({ type:'init', ok:false, err:String(e) }); }
+  if (up) postMessage({ type:'init', ok:true });
+  onmessage = e => {
+    const { buf, w, h } = e.data;
+    let text = null;
+    try {
+      const r = jsQR(new Uint8ClampedArray(buf), w, h, { inversionAttempts:'dontInvert' });
+      if (r) text = r.data;
+    } catch (err) {}
+    postMessage({ type:'result', text });
+  };
+`;
+
+function spawnPool(n) {
+  const url = URL.createObjectURL(new Blob([WORKER_SRC], { type: 'text/javascript' }));
+  const all = [];
+  let answered = 0, settled = false;
+  return new Promise(resolve => {
+    const finish = () => {
+      if (settled || answered < n) return;
+      settled = true;
+      URL.revokeObjectURL(url);
+      const live = all.filter(r => r.ok);
+      all.filter(r => !r.ok).forEach(r => r.w.terminate());
+      resolve(live.length ? live : null);
+    };
+    for (let i = 0; i < n; i++) {
+      let w;
+      try { w = new Worker(url); }
+      catch { answered++; finish(); continue; }
+      const rec = { w, busy: false, ok: false };
+      all.push(rec);
+      const bail = setTimeout(() => { answered++; finish(); }, 6000);
+      w.onmessage = ev => {
+        if (ev.data.type === 'init') {
+          clearTimeout(bail); rec.ok = ev.data.ok; answered++; finish(); return;
+        }
+        rec.busy = false; rx.decodes++;
+        if (ev.data.text) ingest(ev.data.text);
+      };
+      w.onerror = () => { clearTimeout(bail); answered++; finish(); };
+    }
+    if (n === 0) finish();
+  });
+}
+
+/* ---------- pull a centred square of pixels off the video ---------- */
+const grab = document.createElement('canvas');
+const gctx = grab.getContext('2d', { willReadFrequently: true });
+
+function captureSquare() {
+  const vw = video.videoWidth, vh = video.videoHeight;
+  if (!vw || !vh) return null;
+  const src = Math.floor(Math.min(vw, vh) * rx.crop);
+  const sx = (vw - src) >> 1, sy = (vh - src) >> 1;
+  const dst = Math.min(src, MAX_SCAN_SIDE);
+  if (grab.width !== dst) { grab.width = grab.height = dst; }
+  gctx.drawImage(video, sx, sy, src, src, 0, 0, dst, dst);
+  return gctx.getImageData(0, 0, dst, dst);
+}
+
+/* ---------- pick the best decoder this device can offer ---------- */
+async function chooseDecoder() {
+  if ('BarcodeDetector' in window) {
+    try {
+      const fmts = await BarcodeDetector.getSupportedFormats();
+      if (fmts.includes('qr_code')) {
+        rx.detector = new BarcodeDetector({ formats: ['qr_code'] });
+        rx.mode = 'native';
+        return 'native';
+      }
+    } catch {}
+  }
+  rx.pool = await spawnPool(rx.workers);
+  if (rx.pool) { rx.mode = 'pool'; return `jsQR ×${rx.pool.length}`; }
   try {
-    rx.detector = new BarcodeDetector({ formats: ['qr_code'] });
+    const mod = await import('https://esm.sh/jsqr@1.4.0');
+    rx.jsQR = mod.default ?? mod;
+    rx.mode = 'main';
+    return 'jsQR ×1';
+  } catch {}
+  throw new Error('No QR decoder available: native detector missing and jsQR could not load.');
+}
+
+async function startReceiver() {
+  const note = $('#rxNote');
+  note.classList.remove('err');
+  note.innerHTML = 'Starting decoder…';
+
+  let label;
+  try {
+    label = await chooseDecoder();
     rx.stream = await openCamera();
   } catch (err) {
-    $('#rxNote').classList.add('err');
-    $('#rxNote').innerHTML = `<b>Camera unavailable.</b> ${err?.name || ''} ${err?.message || err}`;
+    note.classList.add('err');
+    note.innerHTML = `<b>Cannot start.</b> ${err?.name || ''} ${err?.message || err}`;
     return;
   }
-
-  video.srcObject = rx.stream;
-  await video.play().catch(() => {});
-  const s = rx.stream.getVideoTracks()[0].getSettings();
-  $('#mRes').textContent = `${s.width || '?'}×${s.height || '?'}`;
-  $('#mCam').textContent = s.frameRate ? s.frameRate.toFixed(0) : '—';
 
   resetCounters(null);
   rx.on = true;
   rx.camFrames = 0; rx.decodes = 0; rx.lastCam = 0; rx.lastDec = 0;
   $('#rxIdle').hidden = true;
   $('#rxLive').hidden = false;
+  $('#mMode').textContent = label;
+  $('#frameBox').style.width = $('#frameBox').style.height = (rx.crop * 100) + '%';
+
+  video.srcObject = rx.stream;                 // unhide first: iOS stalls hidden video
+  await video.play().catch(() => {});
+  const s = rx.stream.getVideoTracks()[0].getSettings();
+  $('#mRes').textContent = `${s.width || '?'}×${s.height || '?'}`;
+  $('#mCam').textContent = s.frameRate ? s.frameRate.toFixed(0) : '—';
   holdWake();
 
-  const myGen = ++rx.gen;                              // kills zombie rVFC chains
+  const pump = 'requestVideoFrameCallback' in HTMLVideoElement.prototype
+    ? cb => video.requestVideoFrameCallback(cb)
+    : cb => requestAnimationFrame(cb);
+
+  const myGen = ++rx.gen;                      // kills zombie capture chains
   const onFrame = () => {
     if (myGen !== rx.gen) return;
-    video.requestVideoFrameCallback(onFrame);
+    pump(onFrame);
     rx.camFrames++;
-    if (rx.busy) return;
+
+    if (rx.mode === 'native') {
+      if (rx.busy) return;
+      rx.busy = true;
+      rx.detector.detect(video)
+        .then(codes => { for (const c of codes) ingest(c.rawValue); })
+        .catch(() => {})
+        .finally(() => { rx.busy = false; rx.decodes++; });
+      return;
+    }
+
+    if (rx.mode === 'pool') {
+      const free = rx.pool.find(p => !p.busy);
+      if (!free) return;                       // busy pool is the backpressure
+      const img = captureSquare();
+      if (!img) return;
+      free.busy = true;
+      free.w.postMessage({ buf: img.data.buffer, w: img.width, h: img.height }, [img.data.buffer]);
+      return;
+    }
+
+    if (rx.busy) return;                       // main-thread jsQR, last resort
     rx.busy = true;
-    rx.detector.detect(video)
-      .then(codes => { for (const c of codes) ingest(c.rawValue); })
-      .catch(() => {})
-      .finally(() => { rx.busy = false; rx.decodes++; });
+    const img = captureSquare();
+    if (img) {
+      const r = rx.jsQR(img.data, img.width, img.height, { inversionAttempts: 'dontInvert' });
+      if (r) ingest(r.data);
+    }
+    rx.decodes++; rx.busy = false;
   };
-  video.requestVideoFrameCallback(onFrame);
+  pump(onFrame);
 }
 
 function stopReceiver() {
@@ -588,6 +732,8 @@ function stopReceiver() {
   rx.stream?.getTracks().forEach(t => t.stop());
   rx.stream = null;
   video.srcObject = null;
+  rx.pool?.forEach(p => p.w.terminate());
+  rx.pool = null; rx.mode = null; rx.busy = false;
   releaseWake();
   $('#rxLive').hidden = true;
   $('#rxIdle').hidden = false;
@@ -633,6 +779,8 @@ setInterval(() => {
   $('#mUnique').textContent = rx.seen.size;
   $('#mBytes').textContent = rx.bytes || '—';
   $('#mDupes').textContent = rx.dupes;
+  $('#mHits').textContent = rx.hits;
+  $('#mScan').textContent = rx.mode === 'native' ? 'n/a' : (grab.width ? grab.width + '²' : '—');
 
   const elapsed = (now - rx.t0) / 1000;
   $('#mTime').textContent = elapsed < 60
@@ -656,6 +804,20 @@ setInterval(() => {
     drawSpark();
   }
 }, 250);
+
+function renderTune() {
+  $('#workerChips').innerHTML = [1, 2, 3, 4].map(n =>
+    `<button class="chip" data-w="${n}" aria-pressed="${rx.workers === n}">${n}</button>`).join(' ');
+  $('#cropChips').innerHTML = [[1, 'full'], [0.75, '75%'], [0.55, '55%']].map(([v, l]) =>
+    `<button class="chip" data-c="${v}" aria-pressed="${rx.crop === v}">${l}</button>`).join(' ');
+}
+$('#tune').addEventListener('click', e => {
+  const w = e.target.closest('[data-w]')?.dataset.w;
+  const c = e.target.closest('[data-c]')?.dataset.c;
+  if (w) rx.workers = +w;
+  if (c) rx.crop = +c;
+  if (w || c) renderTune();
+});
 
 $('#btnStart').addEventListener('click', startReceiver);
 $('#btnStop').addEventListener('click', stopReceiver);
@@ -695,16 +857,27 @@ async function buildReport() {
 
   renderHoldChips();
 
-  const ok = detectorNote === 'qr_code' && camApi && secure;
+  const native = detectorNote === 'qr_code';
   const note = $('#rxNote');
-  note.classList.toggle('err', !ok);
-  note.innerHTML = ok
-    ? 'Point the camera at the transmitting screen and hold steady — <b>prop the phone against something</b>. Autofocus hunting from hand tremor costs more throughput than anything else you can tune.'
-    : !secure
-      ? '<b>This page is not a secure context,</b> so the camera API is unavailable. Serve it over https or from localhost.'
-      : detectorNote !== 'qr_code'
-        ? '<b>No native QR detector on this platform.</b> Chrome only exposes <code>BarcodeDetector</code> where the OS provides one — Android, macOS and ChromeOS, not Windows or Linux, and not iOS. Receive on an Android phone, or wait for the jsQR fallback.'
-        : '<b>No camera API on this device.</b>';
+  const steady = 'Prop the phone against something. <b>Autofocus hunting from hand tremor costs more throughput than anything you can tune here.</b>';
+
+  note.classList.toggle('err', !secure || !camApi);
+  $('#tune').hidden = native;
+  $('#btnStart').disabled = !secure || !camApi;
+
+  if (!secure) {
+    note.innerHTML = '<b>Not a secure context,</b> so there is no camera API at all. Serve this over https or from localhost.';
+  } else if (!camApi) {
+    note.innerHTML = '<b>No camera API on this device.</b>';
+  } else if (native) {
+    note.innerHTML = 'Native <code>BarcodeDetector</code> available — the fast path. ' + steady;
+  } else {
+    note.innerHTML = '<b>No native detector here,</b> so decoding falls back to jsQR in workers. ' +
+      'Chrome only exposes <code>BarcodeDetector</code> where the OS provides one: Android, macOS and ChromeOS. ' +
+      'Not Windows, not Linux, and not iOS — every iOS browser is WebKit underneath, Chrome included. ' +
+      'Expect a lower ceiling and read <b>decodes/s</b> as your real limit. ' + steady;
+  }
+  renderTune();
 }
 
 const VIEWS = { '#/': '#view-home', '#/send': '#view-send', '#/receive': '#view-recv' };
