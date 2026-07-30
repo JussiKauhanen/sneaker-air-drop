@@ -1,0 +1,733 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0a0c10">
+<title>Optical Link · Phase 1 throughput rig</title>
+<style>
+  :root{
+    --ink:#0a0c10;
+    --ink-2:#111620;
+    --ink-3:#161d28;
+    --line:#242d3b;
+    --fg:#e7ebf2;
+    --dim:#78849a;
+    --emit:#ffb03a;   /* sender side: the screen emits */
+    --sense:#4fd6e0;  /* receiver side: the camera senses */
+    --bad:#ff6b5f;
+    --mono: ui-monospace, "SF Mono", "Cascadia Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, system-ui, sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;height:100%}
+  body{
+    background:var(--ink); color:var(--fg);
+    font-family:var(--sans);
+    -webkit-font-smoothing:antialiased;
+    overscroll-behavior:none;
+  }
+  button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
+  :focus-visible{outline:2px solid var(--sense);outline-offset:2px}
+
+  .wrap{max-width:760px;margin:0 auto;padding:32px 20px 64px}
+
+  /* ---------- shared bits ---------- */
+  .eyebrow{
+    font-family:var(--mono);font-size:11px;letter-spacing:.22em;text-transform:uppercase;
+    color:var(--dim);margin:0 0 10px
+  }
+  .rule{height:1px;background:var(--line);border:0;margin:28px 0}
+  .mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+
+  /* ---------- landing ---------- */
+  .masthead h1{
+    font-size:clamp(34px,9vw,54px);line-height:.95;margin:0;
+    font-weight:800;letter-spacing:-.03em;
+  }
+  .masthead h1 span{display:block;color:var(--dim);font-weight:300}
+  .lede{color:var(--dim);font-size:15px;line-height:1.55;max-width:46ch;margin:18px 0 0}
+
+  .roles{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:34px}
+  @media(max-width:520px){.roles{grid-template-columns:1fr}}
+  .role{
+    display:block;width:100%;text-align:left;
+    background:var(--ink-2);border:1px solid var(--line);border-radius:3px;
+    padding:20px 18px 18px;transition:border-color .12s, background .12s;
+  }
+  .role:hover{background:var(--ink-3)}
+  .role[data-role="send"]:hover{border-color:var(--emit)}
+  .role[data-role="recv"]:hover{border-color:var(--sense)}
+  .role .tag{font-family:var(--mono);font-size:11px;letter-spacing:.18em;text-transform:uppercase}
+  .role[data-role="send"] .tag{color:var(--emit)}
+  .role[data-role="recv"] .tag{color:var(--sense)}
+  .role .name{font-size:23px;font-weight:700;letter-spacing:-.015em;margin:12px 0 6px}
+  .role .desc{color:var(--dim);font-size:13.5px;line-height:1.5;margin:0}
+
+  .report{font-family:var(--mono);font-size:12.5px;margin-top:6px}
+  .report .row{display:flex;justify-content:space-between;gap:16px;padding:7px 0;border-bottom:1px solid var(--line)}
+  .report .k{color:var(--dim);letter-spacing:.06em}
+  .report .v{text-align:right}
+  .v.ok{color:var(--sense)} .v.no{color:var(--bad)} .v.warn{color:var(--emit)}
+
+  /* ---------- send ---------- */
+  .stage{
+    min-height:100dvh;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    background:#000;padding:0 8px;
+  }
+  .stage.live{cursor:none}
+  #qr{display:block;image-rendering:pixelated}
+  .placeholder{color:#3a4453;font-family:var(--mono);font-size:13px;text-align:center;line-height:1.7;padding:0 24px}
+
+  .closebtn{
+    position:fixed;top:10px;right:10px;z-index:20;
+    width:44px;height:44px;border:1px solid var(--line);border-radius:3px;
+    background:rgba(10,12,16,.86);color:var(--dim);
+    font-size:20px;line-height:1;display:flex;align-items:center;justify-content:center;
+  }
+  .closebtn:hover{color:var(--fg);border-color:var(--emit)}
+
+  .dock{
+    position:fixed;left:0;right:0;bottom:0;z-index:15;
+    background:rgba(10,12,16,.94);border-top:1px solid var(--line);
+    padding:10px 12px calc(10px + env(safe-area-inset-bottom));
+    font-family:var(--mono);font-size:12px;
+  }
+  .dock .band{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:8px}
+  .dock .band:last-child{margin-bottom:0}
+  .dock .lbl{color:#4d5666;letter-spacing:.16em;text-transform:uppercase;font-size:10px;width:56px;flex:none}
+  .chip{
+    border:1px solid var(--line);border-radius:2px;padding:5px 9px;color:var(--dim);
+    background:var(--ink-2);letter-spacing:.04em;
+  }
+  .chip:hover{color:var(--fg)}
+  .chip[aria-pressed="true"]{border-color:var(--emit);color:var(--emit);background:rgba(255,176,58,.08)}
+  .chip small{opacity:.6;margin-left:5px}
+  .telemetry{display:flex;flex-wrap:wrap;gap:4px 18px;color:var(--dim);padding-top:2px}
+  .telemetry b{color:var(--fg);font-weight:500}
+  .telemetry .alert{color:var(--bad)}
+  input[type=range]{accent-color:var(--emit);flex:1;min-width:110px;max-width:220px}
+
+  /* ---------- receive ---------- */
+  .rx{padding:22px 18px calc(28px + env(safe-area-inset-bottom));max-width:620px;margin:0 auto}
+  .readout{text-align:center;padding:8px 0 4px}
+  .readout .big{
+    font-family:var(--mono);font-variant-numeric:tabular-nums;
+    font-size:clamp(60px,20vw,104px);line-height:.9;font-weight:600;
+    color:var(--sense);letter-spacing:-.04em;
+  }
+  .readout .unit{font-family:var(--mono);font-size:12px;letter-spacing:.28em;text-transform:uppercase;color:var(--dim);margin-top:12px}
+  #spark{display:block;width:100%;height:56px;margin:16px 0 4px}
+
+  .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--line);border:1px solid var(--line);border-radius:3px;overflow:hidden;margin-top:18px}
+  @media(max-width:400px){.grid{grid-template-columns:repeat(2,1fr)}}
+  .cell{background:var(--ink-2);padding:11px 12px}
+  .cell .k{font-family:var(--mono);font-size:9.5px;letter-spacing:.16em;text-transform:uppercase;color:#5a6478}
+  .cell .v{font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:19px;margin-top:5px}
+
+  #cam{
+    width:100%;max-height:34vh;object-fit:cover;background:#000;
+    border:1px solid var(--line);border-radius:3px;margin-top:18px;display:block;
+  }
+  .actions{display:flex;gap:8px;margin-top:14px}
+  .btn{
+    flex:1;padding:13px;border:1px solid var(--line);border-radius:3px;
+    font-family:var(--mono);font-size:12px;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--dim);background:var(--ink-2);
+  }
+  .btn:hover{color:var(--fg)}
+  .btn.primary{border-color:var(--sense);color:var(--sense);background:rgba(79,214,224,.07)}
+
+  .notice{
+    border:1px solid var(--line);border-left:2px solid var(--emit);border-radius:3px;
+    background:var(--ink-2);padding:14px 16px;font-size:13.5px;line-height:1.6;color:var(--dim);margin-top:16px
+  }
+  .notice.err{border-left-color:var(--bad)}
+  .notice b{color:var(--fg);font-weight:600}
+  .notice code{font-family:var(--mono);font-size:12px;color:var(--emit)}
+
+  [hidden]{display:none !important}
+</style>
+</head>
+<body>
+
+<!-- ============ LANDING ============ -->
+<section id="view-home" class="wrap">
+  <div class="masthead">
+    <p class="eyebrow">Phase 1 · throughput rig</p>
+    <h1>Optical Link<span>screen to camera</span></h1>
+    <p class="lede">One device paints data as animated QR codes. The other reads them through its camera. Nothing is
+      paired, nothing is networked. This build measures one thing: how many unique bytes per second actually survive
+      the trip.</p>
+  </div>
+
+  <div class="roles">
+    <button class="role" data-role="send" data-go="#/send">
+      <span class="tag">◆ emit</span>
+      <div class="name">Send</div>
+      <p class="desc">Turns this screen into the transmitter. Four test patterns, low to maximum density.</p>
+    </button>
+    <button class="role" data-role="recv" data-go="#/receive">
+      <span class="tag">◈ sense</span>
+      <div class="name">Receive</div>
+      <p class="desc">Points this camera at the transmitter and counts what lands. Use a phone here.</p>
+    </button>
+  </div>
+
+  <hr class="rule">
+  <p class="eyebrow">This device</p>
+  <div class="report" id="report"></div>
+</section>
+
+<!-- ============ SEND ============ -->
+<section id="view-send" hidden>
+  <button class="closebtn" data-go="#/" title="Close streamer (Esc)" aria-label="Close streamer">×</button>
+  <div class="stage" id="stage">
+    <canvas id="qr" hidden></canvas>
+    <p class="placeholder" id="ph">pick a pattern below to start<br>max screen brightness · keep the code square to the camera</p>
+  </div>
+  <div class="dock">
+    <div class="band">
+      <span class="lbl">Pattern</span>
+      <span id="patternChips"></span>
+    </div>
+    <div class="band">
+      <span class="lbl">Hold</span>
+      <span id="holdChips"></span>
+      <span class="lbl" style="width:auto;margin-left:10px">Size</span>
+      <input type="range" id="sizeRange" min="240" max="1400" step="20" value="640">
+      <span class="chip" id="sizeVal" style="pointer-events:none">640 px</span>
+    </div>
+    <div class="band telemetry" id="txTel">
+      <span>idle</span>
+    </div>
+  </div>
+</section>
+
+<!-- ============ RECEIVE ============ -->
+<section id="view-recv" hidden>
+  <button class="closebtn" data-go="#/" title="Stop and close (Esc)" aria-label="Stop and close">×</button>
+  <div class="rx">
+    <p class="eyebrow">◈ Receiving</p>
+
+    <div id="rxLive" hidden>
+      <div class="readout">
+        <div class="big" id="rateBig">0.0</div>
+        <div class="unit">KB / s · last 5 s</div>
+      </div>
+      <canvas id="spark"></canvas>
+
+      <div class="grid">
+        <div class="cell"><div class="k">Unique frames</div><div class="v" id="mUnique">0</div></div>
+        <div class="cell"><div class="k">Frame loss</div><div class="v" id="mLoss">—</div></div>
+        <div class="cell"><div class="k">Bytes / frame</div><div class="v" id="mBytes">—</div></div>
+        <div class="cell"><div class="k">Average KB/s</div><div class="v" id="mAvg">0.0</div></div>
+        <div class="cell"><div class="k">Duplicates</div><div class="v" id="mDupes">0</div></div>
+        <div class="cell"><div class="k">Elapsed</div><div class="v" id="mTime">0s</div></div>
+        <div class="cell"><div class="k">Capture fps</div><div class="v" id="mCam">—</div></div>
+        <div class="cell"><div class="k">Decodes / s</div><div class="v" id="mDec">—</div></div>
+        <div class="cell"><div class="k">Capture size</div><div class="v" id="mRes">—</div></div>
+      </div>
+
+      <video id="cam" playsinline muted autoplay></video>
+      <div class="actions">
+        <button class="btn" id="btnReset">Reset counters</button>
+        <button class="btn" id="btnStop">Stop camera</button>
+      </div>
+    </div>
+
+    <div id="rxIdle">
+      <div class="notice" id="rxNote"></div>
+      <div class="actions"><button class="btn primary" id="btnStart">Start camera</button></div>
+    </div>
+  </div>
+</section>
+
+<script type="module">
+/* ============================================================
+   Optical Link — Phase 1 throughput rig
+   Measures unique-frame goodput over a screen→camera link.
+   No fountain coding yet: frames are sequence-numbered filler.
+   ============================================================ */
+
+const $ = s => document.querySelector(s);
+
+/* ---------- patterns: QR version, byte-mode capacity at ECC level L ---------- */
+const PATTERNS = [
+  { key:'A', version:10, want:271,  modules:57  },
+  { key:'B', version:20, want:858,  modules:97  },
+  { key:'C', version:27, want:1465, modules:125 },
+  { key:'D', version:40, want:2953, modules:177 },
+];
+
+/* ---------- ASCII filler pool (1 char === 1 byte in QR byte mode) ---------- */
+const POOL = (() => {
+  let s = '', x = 0x9e3779b9 >>> 0;
+  for (let i = 0; i < 8192; i++) {
+    x ^= x << 13; x >>>= 0; x ^= x >>> 17; x ^= x << 5; x >>>= 0;
+    s += String.fromCharCode(33 + (x % 94));
+  }
+  return s;
+})();
+
+const HEAD_RE = /^S([0-9a-f]{4})N([0-9a-f]{8})\|/;
+const buildPayload = (session, seq, bytes) => {
+  const head = 'S' + session + 'N' + seq.toString(16).padStart(8, '0') + '|';
+  return head + POOL.substr((seq * 37) % 4096, bytes - head.length);
+};
+
+/* ---------- QR encoder, loaded from CDN (phase 2 vendors this in) ---------- */
+let QR = null;
+async function loadQR() {
+  if (QR) return QR;
+  const sources = [
+    'https://esm.sh/qrcode@1.5.4',
+    'https://cdn.jsdelivr.net/npm/qrcode@1.5.4/+esm',
+  ];
+  for (const url of sources) {
+    try {
+      const mod = await import(/* @vite-ignore */ url);
+      QR = mod.default ?? mod;
+      if (typeof QR.create === 'function') return QR;
+    } catch (err) { console.warn('QR encoder unavailable at', url, err); }
+  }
+  QR = null;
+  throw new Error('No QR encoder reachable. Check the network on this device.');
+}
+
+/* ---------- refresh-rate probe ---------- */
+let displayHz = 60;
+function probeRefresh(ms = 700) {
+  return new Promise(resolve => {
+    const stamps = [];
+    const step = t => {
+      stamps.push(t);
+      if (stamps.length < 4 || t - stamps[0] < ms) return requestAnimationFrame(step);
+      const deltas = [];
+      for (let i = 1; i < stamps.length; i++) deltas.push(stamps[i] - stamps[i - 1]);
+      deltas.sort((a, b) => a - b);
+      resolve(1000 / (deltas[deltas.length >> 1] || 16.67));
+    };
+    requestAnimationFrame(step);
+  });
+}
+
+/* ---------- screen wake lock ---------- */
+let wakeLock = null;
+async function holdWake() {
+  try { wakeLock = await navigator.wakeLock?.request('screen'); } catch {}
+}
+function releaseWake() { try { wakeLock?.release(); } catch {} wakeLock = null; }
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && !wakeLock && location.hash !== '#/') holdWake();
+});
+
+/* ============================================================
+   SENDER
+   ============================================================ */
+const tx = {
+  on: false, raf: 0, tick: 0, hold: 2,
+  pattern: null, bytes: 0, seq: 0, session: '0000',
+  queue: [], sent: 0, stalls: 0, genMs: 0, deltas: [], lastT: 0,
+  sizeCss: 640, started: 0,
+};
+const QUEUE_TARGET = 20;
+
+const canvas = $('#qr');
+const ctx = canvas.getContext('2d');
+const scratch = document.createElement('canvas');
+const sctx = scratch.getContext('2d');
+
+/* Probe the real capacity instead of trusting the table. */
+function fitBytes(version, want) {
+  for (let b = want; b > want - 32; b--) {
+    try {
+      QR.create([{ data: buildPayload('0000', 0, b), mode: 'byte' }],
+                { version, errorCorrectionLevel: 'L' });
+      return b;
+    } catch {}
+  }
+  return -1;
+}
+
+function makeFrame() {
+  const t0 = performance.now();
+  const text = buildPayload(tx.session, tx.seq++, tx.bytes);
+  const qr = QR.create([{ data: text, mode: 'byte' }],
+                       { version: tx.pattern.version, errorCorrectionLevel: 'L' });
+  const size = qr.modules.size, cells = qr.modules.data;
+  const dim = size + 8;                        // 4-module quiet zone on every side
+  const img = new ImageData(dim, dim);
+  img.data.fill(255);
+  for (let r = 0; r < size; r++) {
+    const rowBase = (r + 4) * dim;
+    for (let c = 0; c < size; c++) {
+      if (cells[r * size + c]) {
+        const i = (rowBase + c + 4) * 4;
+        img.data[i] = 0; img.data[i + 1] = 0; img.data[i + 2] = 0;
+      }
+    }
+  }
+  tx.genMs = tx.genMs * 0.9 + (performance.now() - t0) * 0.1;
+  return { img, dim };
+}
+
+function paint(frame) {
+  if (scratch.width !== frame.dim) { scratch.width = scratch.height = frame.dim; }
+  sctx.putImageData(frame.img, 0, 0);
+
+  const dpr = window.devicePixelRatio || 1;
+  const cap = Math.min(window.innerWidth - 16, window.innerHeight - 150);
+  const target = Math.round(Math.min(tx.sizeCss, cap) * dpr);
+  const scale = Math.max(1, Math.floor(target / frame.dim));
+  const px = frame.dim * scale;
+
+  if (canvas.width !== px) { canvas.width = canvas.height = px; }
+  canvas.style.width = canvas.style.height = (px / dpr) + 'px';
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(scratch, 0, 0, px, px);
+}
+
+function txLoop(t) {
+  if (!tx.on) return;
+  tx.raf = requestAnimationFrame(txLoop);
+
+  if (tx.lastT) { tx.deltas.push(t - tx.lastT); if (tx.deltas.length > 90) tx.deltas.shift(); }
+  tx.lastT = t;
+
+  if (++tx.tick < tx.hold) return;
+  tx.tick = 0;
+
+  const frame = tx.queue.shift();
+  if (frame) { paint(frame); tx.sent++; } else { tx.stalls++; }
+
+  for (let i = 0; i < 2 && tx.queue.length < QUEUE_TARGET; i++) tx.queue.push(makeFrame());
+}
+
+async function startStream(pattern) {
+  stopStream();
+  try { await loadQR(); }
+  catch (err) { $('#ph').innerHTML = 'QR encoder failed to load.<br>' + err.message; return; }
+
+  const bytes = fitBytes(pattern.version, pattern.want);
+  if (bytes < 0) { $('#ph').textContent = 'Pattern ' + pattern.key + ' would not encode on this device.'; return; }
+
+  tx.pattern = pattern;
+  tx.bytes = bytes;
+  tx.seq = 0;
+  tx.sent = 0; tx.stalls = 0; tx.genMs = 0; tx.deltas = []; tx.lastT = 0; tx.tick = 0;
+  tx.session = Math.floor(Math.random() * 0x10000).toString(16).padStart(4, '0');
+  tx.queue = [];
+
+  $('#ph').textContent = 'building frame buffer…';
+  await new Promise(r => setTimeout(r, 0));
+  for (let i = 0; i < QUEUE_TARGET; i++) tx.queue.push(makeFrame());
+
+  $('#ph').hidden = true;
+  canvas.hidden = false;
+  $('#stage').classList.add('live');
+  tx.on = true; tx.started = performance.now();
+  holdWake();
+  tx.raf = requestAnimationFrame(txLoop);
+  renderPatternChips();
+}
+
+function stopStream() {
+  tx.on = false;
+  cancelAnimationFrame(tx.raf);
+  tx.queue = [];
+  canvas.hidden = true;
+  $('#stage').classList.remove('live');
+  $('#ph').hidden = false;
+  $('#ph').innerHTML = 'pick a pattern below to start<br>max screen brightness · keep the code square to the camera';
+  releaseWake();
+  renderPatternChips();
+}
+
+/* ---------- sender controls ---------- */
+function renderPatternChips() {
+  $('#patternChips').innerHTML = PATTERNS.map(p =>
+    `<button class="chip" data-pattern="${p.key}" aria-pressed="${tx.on && tx.pattern?.key === p.key}">` +
+    `${p.key}<small>${p.want} B · v${p.version}</small></button>`).join(' ');
+}
+function renderHoldChips() {
+  $('#holdChips').innerHTML = [1, 2, 3, 4, 5].map(h =>
+    `<button class="chip" data-hold="${h}" aria-pressed="${tx.hold === h}">` +
+    `${h}<small>${(displayHz / h).toFixed(0)} fps</small></button>`).join(' ');
+}
+
+$('#patternChips').addEventListener('click', e => {
+  const key = e.target.closest('[data-pattern]')?.dataset.pattern;
+  if (!key) return;
+  if (tx.on && tx.pattern?.key === key) stopStream();
+  else startStream(PATTERNS.find(p => p.key === key));
+});
+$('#holdChips').addEventListener('click', e => {
+  const h = e.target.closest('[data-hold]')?.dataset.hold;
+  if (!h) return;
+  tx.hold = +h; tx.tick = 0; renderHoldChips();
+});
+$('#sizeRange').addEventListener('input', e => {
+  tx.sizeCss = +e.target.value;
+  $('#sizeVal').textContent = tx.sizeCss + ' px';
+});
+
+setInterval(() => {
+  if (location.hash !== '#/send') return;
+  const tel = $('#txTel');
+  if (!tx.on) { tel.innerHTML = '<span>idle · nothing transmitting</span>'; return; }
+  const med = tx.deltas.length
+    ? [...tx.deltas].sort((a, b) => a - b)[tx.deltas.length >> 1] : 16.67;
+  const hz = 1000 / med;
+  const secs = (performance.now() - tx.started) / 1000;
+  tel.innerHTML =
+    `<span>pattern <b>${tx.pattern.key}</b></span>` +
+    `<span>bytes/frame <b>${tx.bytes}</b></span>` +
+    `<span>tx <b>${(hz / tx.hold).toFixed(1)} fps</b></span>` +
+    `<span>display <b>${hz.toFixed(1)} Hz</b></span>` +
+    `<span>sent <b>${tx.sent}</b></span>` +
+    `<span>offered <b>${(tx.bytes * tx.sent / secs / 1024).toFixed(1)} KB/s</b></span>` +
+    `<span>gen <b>${tx.genMs.toFixed(1)} ms</b></span>` +
+    `<span>buffer <b>${tx.queue.length}</b></span>` +
+    `<span class="${tx.stalls ? 'alert' : ''}">stalls <b>${tx.stalls}</b></span>`;
+}, 400);
+
+/* ============================================================
+   RECEIVER
+   ============================================================ */
+const rx = {
+  stream: null, detector: null, gen: 0, busy: false, on: false,
+  session: null, seen: new Set(), minSeq: Infinity, maxSeq: -1,
+  bytes: 0, hits: 0, dupes: 0, camFrames: 0, decodes: 0,
+  t0: 0, recent: [], history: [], lastSample: 0, lastCam: 0, lastDec: 0,
+  camFps: 0, decFps: 0,
+};
+const video = $('#cam');
+const spark = $('#spark');
+const sctxSpark = spark.getContext('2d');
+
+function resetCounters(session = null) {
+  rx.session = session;
+  rx.seen = new Set();
+  rx.minSeq = Infinity; rx.maxSeq = -1;
+  rx.bytes = 0; rx.hits = 0; rx.dupes = 0;
+  rx.t0 = performance.now();
+  rx.recent = []; rx.history = [];
+}
+
+function ingest(raw) {
+  const m = HEAD_RE.exec(raw);
+  if (!m) return;
+  if (m[1] !== rx.session) resetCounters(m[1]);       // sender restarted → clean slate
+  rx.hits++;
+  const seq = parseInt(m[2], 16);
+  if (rx.seen.has(seq)) { rx.dupes++; return; }
+  rx.seen.add(seq);
+  rx.bytes = raw.length;
+  if (seq < rx.minSeq) rx.minSeq = seq;
+  if (seq > rx.maxSeq) rx.maxSeq = seq;
+  rx.recent.push({ t: performance.now(), b: raw.length });
+}
+
+async function openCamera() {
+  const attempts = [
+    { video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, frameRate: { exact: 60 } } },
+    { video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, frameRate: { ideal: 60 } } },
+    { video: { facingMode: { ideal: 'environment' } } },
+    { video: true },
+  ];
+  let last;
+  for (const c of attempts) {
+    try { return await navigator.mediaDevices.getUserMedia(c); }
+    catch (err) { last = err; }
+  }
+  throw last;
+}
+
+async function startReceiver() {
+  try {
+    rx.detector = new BarcodeDetector({ formats: ['qr_code'] });
+    rx.stream = await openCamera();
+  } catch (err) {
+    $('#rxNote').classList.add('err');
+    $('#rxNote').innerHTML = `<b>Camera unavailable.</b> ${err?.name || ''} ${err?.message || err}`;
+    return;
+  }
+
+  video.srcObject = rx.stream;
+  await video.play().catch(() => {});
+  const s = rx.stream.getVideoTracks()[0].getSettings();
+  $('#mRes').textContent = `${s.width || '?'}×${s.height || '?'}`;
+  $('#mCam').textContent = s.frameRate ? s.frameRate.toFixed(0) : '—';
+
+  resetCounters(null);
+  rx.on = true;
+  rx.camFrames = 0; rx.decodes = 0; rx.lastCam = 0; rx.lastDec = 0;
+  $('#rxIdle').hidden = true;
+  $('#rxLive').hidden = false;
+  holdWake();
+
+  const myGen = ++rx.gen;                              // kills zombie rVFC chains
+  const onFrame = () => {
+    if (myGen !== rx.gen) return;
+    video.requestVideoFrameCallback(onFrame);
+    rx.camFrames++;
+    if (rx.busy) return;
+    rx.busy = true;
+    rx.detector.detect(video)
+      .then(codes => { for (const c of codes) ingest(c.rawValue); })
+      .catch(() => {})
+      .finally(() => { rx.busy = false; rx.decodes++; });
+  };
+  video.requestVideoFrameCallback(onFrame);
+}
+
+function stopReceiver() {
+  rx.gen++;
+  rx.on = false;
+  rx.stream?.getTracks().forEach(t => t.stop());
+  rx.stream = null;
+  video.srcObject = null;
+  releaseWake();
+  $('#rxLive').hidden = true;
+  $('#rxIdle').hidden = false;
+}
+
+function drawSpark() {
+  const dpr = window.devicePixelRatio || 1;
+  const w = spark.clientWidth, h = spark.clientHeight;
+  if (!w) return;
+  if (spark.width !== w * dpr) { spark.width = w * dpr; spark.height = h * dpr; }
+  const g = sctxSpark;
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  g.clearRect(0, 0, w, h);
+
+  g.strokeStyle = '#242d3b'; g.lineWidth = 1;
+  g.beginPath(); g.moveTo(0, h - .5); g.lineTo(w, h - .5); g.stroke();
+
+  const data = rx.history;
+  if (data.length < 2) return;
+  const peak = Math.max(...data, 0.1);
+  const step = w / 239;
+  g.beginPath();
+  data.forEach((v, i) => {
+    const x = w - (data.length - 1 - i) * step;
+    const y = h - (v / peak) * (h - 6) - 2;
+    i ? g.lineTo(x, y) : g.moveTo(x, y);
+  });
+  g.strokeStyle = '#4fd6e0'; g.lineWidth = 1.5; g.lineJoin = 'round'; g.stroke();
+
+  g.font = '10px ui-monospace, monospace'; g.fillStyle = '#5a6478';
+  g.fillText(peak.toFixed(1) + ' peak', 2, 11);
+}
+
+setInterval(() => {
+  if (!rx.on) return;
+  const now = performance.now();
+
+  rx.recent = rx.recent.filter(r => now - r.t < 5000);
+  const span = Math.min(5, (now - rx.t0) / 1000) || 1;
+  const rate = rx.recent.reduce((a, r) => a + r.b, 0) / 1024 / span;
+
+  $('#rateBig').textContent = rate.toFixed(1);
+  $('#mUnique').textContent = rx.seen.size;
+  $('#mBytes').textContent = rx.bytes || '—';
+  $('#mDupes').textContent = rx.dupes;
+
+  const elapsed = (now - rx.t0) / 1000;
+  $('#mTime').textContent = elapsed < 60
+    ? elapsed.toFixed(0) + 's'
+    : Math.floor(elapsed / 60) + 'm ' + Math.floor(elapsed % 60) + 's';
+  $('#mAvg').textContent = (rx.seen.size * rx.bytes / 1024 / Math.max(elapsed, 1)).toFixed(1);
+
+  const offered = rx.maxSeq - rx.minSeq + 1;
+  $('#mLoss').textContent = (rx.maxSeq >= 0 && offered > 4)
+    ? (100 * (1 - rx.seen.size / offered)).toFixed(1) + '%' : '—';
+
+  rx.camFps = (rx.camFrames - rx.lastCam) * 4; rx.lastCam = rx.camFrames;
+  rx.decFps = (rx.decodes - rx.lastDec) * 4;   rx.lastDec = rx.decodes;
+  $('#mCam').textContent = rx.camFps.toFixed(0);
+  $('#mDec').textContent = rx.decFps.toFixed(0);
+
+  if (now - rx.lastSample > 250) {
+    rx.lastSample = now;
+    rx.history.push(rate);
+    if (rx.history.length > 240) rx.history.shift();
+    drawSpark();
+  }
+}, 250);
+
+$('#btnStart').addEventListener('click', startReceiver);
+$('#btnStop').addEventListener('click', stopReceiver);
+$('#btnReset').addEventListener('click', () => resetCounters(rx.session));
+
+/* ============================================================
+   CAPABILITY REPORT + ROUTING
+   ============================================================ */
+async function buildReport() {
+  const rows = [];
+  const secure = window.isSecureContext;
+  rows.push(['secure context', secure ? 'yes' : 'no — camera blocked', secure ? 'ok' : 'no']);
+
+  const camApi = !!navigator.mediaDevices?.getUserMedia;
+  rows.push(['camera api', camApi ? 'present' : 'missing', camApi ? 'ok' : 'no']);
+
+  let detectorNote = 'missing', cls = 'no';
+  if ('BarcodeDetector' in window) {
+    try {
+      const fmts = await BarcodeDetector.getSupportedFormats();
+      if (fmts.includes('qr_code')) { detectorNote = 'qr_code'; cls = 'ok'; }
+      else { detectorNote = 'no qr_code'; cls = 'warn'; }
+    } catch { detectorNote = 'present, unqueryable'; cls = 'warn'; }
+  }
+  rows.push(['barcode detector', detectorNote, cls]);
+
+  rows.push(['video frame callback',
+    'requestVideoFrameCallback' in HTMLVideoElement.prototype ? 'yes' : 'no',
+    'requestVideoFrameCallback' in HTMLVideoElement.prototype ? 'ok' : 'no']);
+
+  displayHz = await probeRefresh();
+  rows.push(['display refresh', displayHz.toFixed(1) + ' Hz', 'ok']);
+  rows.push(['device pixel ratio', String(window.devicePixelRatio || 1), 'ok']);
+
+  $('#report').innerHTML = rows.map(([k, v, c]) =>
+    `<div class="row"><span class="k">${k}</span><span class="v ${c}">${v}</span></div>`).join('');
+
+  renderHoldChips();
+
+  const ok = detectorNote === 'qr_code' && camApi && secure;
+  const note = $('#rxNote');
+  note.classList.toggle('err', !ok);
+  note.innerHTML = ok
+    ? 'Point the camera at the transmitting screen and hold steady — <b>prop the phone against something</b>. Autofocus hunting from hand tremor costs more throughput than anything else you can tune.'
+    : !secure
+      ? '<b>This page is not a secure context,</b> so the camera API is unavailable. Serve it over https or from localhost.'
+      : detectorNote !== 'qr_code'
+        ? '<b>No native QR detector on this platform.</b> Chrome only exposes <code>BarcodeDetector</code> where the OS provides one — Android, macOS and ChromeOS, not Windows or Linux, and not iOS. Receive on an Android phone, or wait for the jsQR fallback.'
+        : '<b>No camera API on this device.</b>';
+}
+
+const VIEWS = { '#/': '#view-home', '#/send': '#view-send', '#/receive': '#view-recv' };
+function route() {
+  const hash = VIEWS[location.hash] ? location.hash : '#/';
+  if (hash !== '#/send' && tx.on) stopStream();
+  if (hash !== '#/receive' && rx.on) stopReceiver();
+  for (const [h, sel] of Object.entries(VIEWS)) $(sel).hidden = (h !== hash);
+  if (hash === '#/send') { renderPatternChips(); renderHoldChips(); }
+  document.body.style.background = hash === '#/send' ? '#000' : 'var(--ink)';
+}
+window.addEventListener('hashchange', route);
+document.addEventListener('click', e => {
+  const go = e.target.closest('[data-go]')?.dataset.go;
+  if (go) { e.preventDefault(); location.hash = go; }
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && location.hash !== '#/') location.hash = '#/';
+});
+window.addEventListener('resize', () => { if (tx.on && tx.queue.length) tx.tick = tx.hold - 1; });
+
+route();
+buildReport();
+</script>
+</body>
+</html>
