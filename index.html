@@ -69,6 +69,13 @@
     font-size:22px;line-height:1;display:flex;align-items:center;justify-content:center;
   }
   .closebtn:hover{color:#fff;border-color:var(--emit)}
+  .docktoggle{
+    display:none;position:fixed;top:10px;left:10px;z-index:20;min-height:46px;
+    border:1px solid var(--line-hi);border-radius:3px;padding:0 13px;
+    background:rgba(21,27,37,.94);color:var(--dim);font-family:var(--mono);
+    font-size:11px;letter-spacing:.08em;text-transform:uppercase;
+  }
+  .docktoggle:hover{color:#fff;border-color:var(--emit)}
   .dock{
     position:fixed;left:0;right:0;bottom:0;z-index:15;background:rgba(13,17,24,.97);
     border-top:1px solid var(--line-hi);padding:11px 12px calc(11px + env(safe-area-inset-bottom));
@@ -81,6 +88,23 @@
   .telemetry b{color:#fff;font-weight:600}
   .telemetry .alert b{color:var(--bad)}
   input[type=range]{accent-color:var(--emit);flex:1;min-width:110px;max-width:200px}
+  @media(max-width:640px), (max-width:900px) and (max-height:500px){
+    .docktoggle{display:block}
+    #view-send .stage{
+      padding-top:64px;
+      padding-bottom:var(--send-dock-height, 250px);
+      transition:padding-bottom .18s ease;
+    }
+    #view-send .dock{
+      max-height:calc(100dvh - 64px);overflow-y:auto;
+      transition:transform .18s ease,visibility 0s linear;
+    }
+    #view-send.dock-collapsed .stage{padding-bottom:0}
+    #view-send.dock-collapsed .dock{
+      transform:translateY(100%);visibility:hidden;pointer-events:none;
+      transition:transform .18s ease,visibility 0s linear .18s;
+    }
+  }
 
   /* ---------- receive ---------- */
   .rx{padding:22px 18px calc(28px + env(safe-area-inset-bottom));max-width:620px;margin:0 auto}
@@ -151,15 +175,16 @@
 
 <!-- ============ SEND ============ -->
 <section id="view-send" hidden>
+  <button class="docktoggle" id="dockToggle" type="button" aria-controls="sendDock" aria-expanded="true">Hide controls</button>
   <button class="closebtn" data-go="#/" title="Close (Esc)" aria-label="Close">×</button>
   <div class="stage" id="stage">
     <canvas id="qr" hidden></canvas>
     <p class="placeholder" id="ph">choose something to send<br>max screen brightness · keep the code square to the camera</p>
   </div>
-  <div class="dock">
+  <div class="dock" id="sendDock">
     <div class="band">
       <span class="lbl">Send</span>
-      <button class="chip" id="srcHello">Hello world</button>
+      <button class="chip" id="srcLorem">Lorem ipsum ×15</button>
       <button class="chip" id="srcFile">Choose file…</button>
       <button class="chip" id="srcTest">Test stream</button>
       <input type="file" id="filePick" hidden>
@@ -304,17 +329,36 @@ const buildTest = (sess, seq, bytes) => {
   return head + POOL.substr((seq * 37) % 4096, bytes - head.length);
 };
 
-const HELLO = new TextEncoder().encode(
-`Hello, world.
+const LOREM_IPSUM = new TextEncoder().encode(
+`Lorem ipsum dolor sit amet, consectetur adipiscing elit. Integer posuere erat a ante venenatis dapibus posuere velit aliquet.
 
-This file did not travel over any network. It was chopped into blocks,
-each block was drawn on a screen as a QR code, and a camera on another
-device read them back one at a time until every block had arrived.
+Donec ullamcorper nulla non metus auctor fringilla. Maecenas faucibus mollis interdum, et curabitur blandit tempus porttitor.
 
-No pairing. No radio. No cable. Just photons and patience.
+Praesent commodo cursus magna, vel scelerisque nisl consectetur et. Aenean lacinia bibendum nulla sed consectetur.
 
---
-sent over an optical link
+Cras mattis consectetur purus sit amet fermentum. Vestibulum id ligula porta felis euismod semper at malesuada.
+
+Nullam quis risus eget urna mollis ornare vel eu leo. Sed posuere consectetur est at lobortis.
+
+Etiam porta sem malesuada magna mollis euismod. Morbi leo risus, porta ac consectetur ac, vestibulum at eros.
+
+Vivamus sagittis lacus vel augue laoreet rutrum faucibus dolor auctor. Duis mollis, est non commodo luctus, nisi erat porttitor ligula.
+
+Curabitur blandit tempus porttitor. Integer posuere erat a ante venenatis dapibus posuere velit aliquet.
+
+Maecenas sed diam eget risus varius blandit sit amet non magna. Donec id elit non mi porta gravida at eget metus.
+
+Aenean eu leo quam. Pellentesque ornare sem lacinia quam venenatis vestibulum, fusce dapibus tellus ac cursus commodo.
+
+Nulla vitae elit libero, a pharetra augue. Cum sociis natoque penatibus et magnis dis parturient montes.
+
+Vestibulum id ligula porta felis euismod semper. Cras justo odio, dapibus ac facilisis in, egestas eget quam.
+
+Donec sed odio dui. Aenean lacinia bibendum nulla sed consectetur, etiam porta sem malesuada magna mollis euismod.
+
+Morbi leo risus, porta ac consectetur ac, vestibulum at eros. Nullam id dolor id nibh ultricies vehicula ut id elit.
+
+Sed posuere consectetur est at lobortis. Maecenas faucibus mollis interdum, donec ullamcorper nulla non metus auctor fringilla.
 `);
 
 /* ---------- QR encoder ---------- */
@@ -360,16 +404,30 @@ document.addEventListener('visibilitychange', () => {
    SENDER
    ============================================================ */
 const tx = {
-  on:false, raf:0, tick:0, hold:2, sizeCss:640,
-  pattern:PATTERNS[2], cap:0, source:null,
+  on:false, raf:0, tick:0, hold:5, sizeCss:640,
+  pattern:PATTERNS[1], cap:0, source:null,
   seq:0, cursor:0, frameNo:0, session:'0000',
   queue:[], cache:new Map(), sent:0, cycles:0, stalls:0, genMs:0,
   deltas:[], lastT:0, started:0,
 };
 const QUEUE_TARGET = 20, CACHE_MAX = 48, MANIFEST_EVERY = 8;
+const DEFAULT_FPS = 12;
+let holdWasChosen = false;
 
 const canvas = $('#qr'), ctx = canvas.getContext('2d');
 const scratch = document.createElement('canvas'), sctx = scratch.getContext('2d');
+const sendView = $('#view-send'), stage = $('#stage'), sendDock = $('#sendDock');
+let sendDockHeight = -1;
+
+function syncSendLayout(forcePaint = false) {
+  const nextHeight = sendDock.offsetHeight;
+  const heightChanged = nextHeight !== sendDockHeight;
+  if (heightChanged) {
+    sendDockHeight = nextHeight;
+    sendView.style.setProperty('--send-dock-height', nextHeight + 'px');
+  }
+  if (tx.on && (forcePaint || heightChanged)) tx.tick = tx.hold - 1;
+}
 
 function fitBytes(version, want) {
   for (let b = want; b > want - 32; b--) {
@@ -450,7 +508,10 @@ function paint(frame) {
   if (scratch.width !== frame.dim) scratch.width = scratch.height = frame.dim;
   sctx.putImageData(frame.img, 0, 0);
   const dpr = window.devicePixelRatio || 1;
-  const cap = Math.min(window.innerWidth - 16, window.innerHeight - 190);
+  const style = getComputedStyle(stage);
+  const usableWidth = stage.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
+  const usableHeight = stage.clientHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom);
+  const cap = Math.min(usableWidth, usableHeight);
   const target = Math.round(Math.min(tx.sizeCss, cap) * dpr);
   const scale = Math.max(1, Math.floor(target / frame.dim));
   const px = frame.dim * scale;
@@ -517,8 +578,8 @@ function stopStream(quiet) {
 function renderSourceChips() {
   const k = tx.on ? tx.source?.kind : null;
   const nm = tx.on && k === 'file' ? tx.source.name : null;
-  $('#srcHello').setAttribute('aria-pressed', String(nm === 'hello.txt'));
-  $('#srcFile').setAttribute('aria-pressed', String(k === 'file' && nm !== 'hello.txt'));
+  $('#srcLorem').setAttribute('aria-pressed', String(nm === 'lorem-ipsum.txt'));
+  $('#srcFile').setAttribute('aria-pressed', String(k === 'file' && nm !== 'lorem-ipsum.txt'));
   $('#srcTest').setAttribute('aria-pressed', String(k === 'test'));
 }
 function renderPatternChips() {
@@ -527,9 +588,12 @@ function renderPatternChips() {
     `${p.key}<small>${p.want} B · v${p.version}</small></button>`).join(' ');
 }
 function renderHoldChips() {
-  $('#holdChips').innerHTML = [1, 2, 3, 4, 5].map(h =>
+  const defaultHold = Math.max(1, Math.round(displayHz / DEFAULT_FPS));
+  const options = [...new Set([1, 2, 3, 4, 5, defaultHold])].sort((a, b) => a - b);
+  $('#holdChips').innerHTML = options.map(h =>
     `<button class="chip" data-hold="${h}" aria-pressed="${tx.hold === h}">` +
     `${h}<small>${(displayHz / h).toFixed(0)} fps</small></button>`).join(' ');
+  syncSendLayout();
 }
 
 $('#patternChips').addEventListener('click', e => {
@@ -542,15 +606,16 @@ $('#patternChips').addEventListener('click', e => {
 $('#holdChips').addEventListener('click', e => {
   const h = e.target.closest('[data-hold]')?.dataset.hold;
   if (!h) return;
+  holdWasChosen = true;
   tx.hold = +h; tx.tick = 0; renderHoldChips();
 });
 $('#sizeRange').addEventListener('input', e => {
   tx.sizeCss = +e.target.value;
   $('#sizeVal').textContent = tx.sizeCss + ' px';
 });
-$('#srcHello').addEventListener('click', () => {
-  if (tx.on && tx.source?.name === 'hello.txt') return stopStream();
-  startStream({ kind: 'file', name: 'hello.txt', bytes: HELLO });
+$('#srcLorem').addEventListener('click', () => {
+  if (tx.on && tx.source?.name === 'lorem-ipsum.txt') return stopStream();
+  startStream({ kind: 'file', name: 'lorem-ipsum.txt', bytes: LOREM_IPSUM });
 });
 $('#srcTest').addEventListener('click', () => {
   if (tx.on && tx.source?.kind === 'test') return stopStream();
@@ -564,11 +629,21 @@ $('#filePick').addEventListener('change', async e => {
   startStream({ kind: 'file', name: f.name, bytes });
   e.target.value = '';
 });
+$('#dockToggle').addEventListener('click', () => {
+  const collapsed = sendView.classList.toggle('dock-collapsed');
+  $('#dockToggle').textContent = collapsed ? 'Show controls' : 'Hide controls';
+  $('#dockToggle').setAttribute('aria-expanded', String(!collapsed));
+  syncSendLayout(true);
+});
 
 setInterval(() => {
   if (location.hash !== '#/send') return;
   const tel = $('#txTel');
-  if (!tx.on) { tel.innerHTML = '<span>idle · nothing transmitting</span>'; return; }
+  if (!tx.on) {
+    tel.innerHTML = '<span>idle · nothing transmitting</span>';
+    syncSendLayout();
+    return;
+  }
   const d = tx.deltas.length ? [...tx.deltas].sort((a, b) => a - b)[tx.deltas.length >> 1] : 16.67;
   const hz = 1000 / d, secs = (performance.now() - tx.started) / 1000;
   let head = `<span>density <b>${tx.pattern.key}</b></span><span>frame <b>${tx.cap} B</b></span>`;
@@ -586,6 +661,7 @@ setInterval(() => {
     `<span>gen <b>${tx.genMs.toFixed(1)} ms</b></span>` +
     `<span>buffer <b>${tx.queue.length}</b></span>` +
     `<span class="${tx.stalls ? 'alert' : ''}">stalls <b>${tx.stalls}</b></span>`;
+  syncSendLayout();
 }, 400);
 
 /* ============================================================
@@ -1029,6 +1105,7 @@ async function buildReport() {
   const rvfc = 'requestVideoFrameCallback' in HTMLVideoElement.prototype;
   rows.push(['video frame callback', rvfc ? 'yes' : 'rAF fallback', rvfc ? 'ok' : 'warn']);
   displayHz = await probeRefresh();
+  if (!holdWasChosen) tx.hold = Math.max(1, Math.round(displayHz / DEFAULT_FPS));
   rows.push(['display refresh', displayHz.toFixed(1) + ' Hz', 'ok']);
   rows.push(['device pixel ratio', String(window.devicePixelRatio || 1), 'ok']);
   $('#report').innerHTML = rows.map(([k, v, c]) =>
@@ -1058,7 +1135,10 @@ function route() {
   if (hash !== '#/send' && tx.on) stopStream();
   if (hash !== '#/receive' && rx.on) stopReceiver();
   for (const [h, sel] of Object.entries(VIEWS)) $(sel).hidden = (h !== hash);
-  if (hash === '#/send') { renderPatternChips(); renderHoldChips(); renderSourceChips(); }
+  if (hash === '#/send') {
+    renderPatternChips(); renderHoldChips(); renderSourceChips();
+    requestAnimationFrame(() => syncSendLayout(true));
+  }
   document.body.style.background = hash === '#/send' ? '#000' : 'var(--ink)';
 }
 window.addEventListener('hashchange', route);
@@ -1069,7 +1149,7 @@ document.addEventListener('click', e => {
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape' && location.hash !== '#/') location.hash = '#/';
 });
-window.addEventListener('resize', () => { if (tx.on && tx.queue.length) tx.tick = tx.hold - 1; });
+window.addEventListener('resize', () => syncSendLayout(true));
 
 route();
 buildReport();
