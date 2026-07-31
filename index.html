@@ -140,20 +140,12 @@
     max-width:82%;min-width:72px;padding:7px 9px 6px;border-radius:9px;
     background:var(--incoming);box-shadow:0 1px 1px rgba(17,27,33,.1);
   }
-  .message.has-image{width:min(82vw,320px);padding:4px}
   .mine .message{background:var(--outgoing)}
   .sender{font-size:11px;line-height:1.25;color:var(--green);font-weight:700;margin-bottom:2px}
-  .has-image .sender{padding:4px 5px 2px}
-  .message-image{
-    display:block;width:100%;height:auto;max-height:420px;object-fit:contain;
-    border-radius:7px;background:#dfe5e2;
-  }
   .text{font-size:15px;line-height:1.36;white-space:pre-wrap;overflow-wrap:anywhere}
-  .has-image .text{padding:5px 5px 1px}
   .text a{color:#087f6d;text-decoration:underline;text-underline-offset:2px}
   .text a:visited{color:#536f91}
   .meta{display:flex;justify-content:flex-end;margin:2px 0 0 12px;color:#7a8a92;font-size:10px}
-  .has-image .meta{padding:0 4px 1px}
 
   .composer{
     flex:none;padding:8px 8px calc(8px + env(safe-area-inset-bottom));background:#f0f2f5;
@@ -175,23 +167,6 @@
     display:grid;place-items:center;
   }
   .emoji-choice:hover{background:#edf4f1}
-  .attachment-preview{
-    min-height:64px;padding:7px;border-radius:14px;background:#fff;
-    display:flex;align-items:center;gap:10px;box-shadow:0 2px 10px rgba(17,27,33,.08);
-  }
-  .attachment-preview img{
-    width:52px;height:52px;border-radius:9px;object-fit:cover;background:#dfe5e2;flex:none;
-  }
-  .attachment-copy{min-width:0;flex:1}
-  .attachment-copy strong{display:block;font-size:13px}
-  .attachment-copy span{
-    display:block;margin-top:4px;color:var(--muted);font-size:11px;
-    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
-  }
-  .remove-attachment{
-    width:38px;height:38px;border-radius:50%;background:#eef2f0;color:#617078;
-    display:grid;place-items:center;font-size:21px;flex:none;
-  }
   .input-wrap{
     position:relative;flex:1;min-width:0;background:#fff;border:1px solid transparent;
     border-radius:24px;display:flex;align-items:center;
@@ -327,6 +302,26 @@
   .admin-link:hover{background:#f6f8f7}
   .admin-link small{display:block;margin-top:3px;color:var(--muted);font-weight:400}
   .admin-arrow{font-size:20px;color:#89969c}
+  .delete-card{
+    margin-top:9px;border:1px solid rgba(200,61,61,.35);border-radius:13px;
+    background:#fff8f8;overflow:hidden;
+  }
+  .delete-action{
+    width:100%;min-height:62px;padding:9px 14px;display:flex;align-items:center;
+    justify-content:space-between;gap:14px;background:transparent;color:var(--ink);text-align:left;
+  }
+  .delete-action:hover{background:#fff1f1}
+  .delete-action strong{display:block;font-size:14px;color:var(--danger)}
+  .delete-action small{display:block;margin-top:4px;color:var(--muted);font-size:12px;line-height:1.35}
+  .trash-icon{width:24px;height:24px;color:var(--danger);flex:none}
+  .delete-confirm{padding:14px}
+  .delete-confirm strong{display:block;color:var(--danger);font-size:14px}
+  .delete-confirm p{margin:5px 0 13px;color:var(--muted);font-size:12px;line-height:1.45}
+  .delete-confirm-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .delete-confirm-actions button{min-height:42px;border-radius:21px;font-weight:700}
+  .delete-cancel{background:#edf1ef;color:#33434b}
+  .delete-everything{background:var(--danger);color:#fff}
+  .delete-everything:hover{background:#ad3030}
 
   .toast{
     position:fixed;left:50%;bottom:calc(76px + env(safe-area-inset-bottom));z-index:80;
@@ -412,19 +407,9 @@
 
     <form class="composer" id="composer">
       <div class="emoji-picker" id="emojiPicker" aria-label="Quick emojis" hidden></div>
-      <div class="attachment-preview" id="attachmentPreview" hidden>
-        <img id="attachmentPreviewImage" alt="">
-        <div class="attachment-copy">
-          <strong>Photo ready</strong>
-          <span id="attachmentMeta"></span>
-        </div>
-        <button class="remove-attachment" id="removeAttachment" type="button" aria-label="Remove photo">×</button>
-      </div>
       <div class="composer-row">
         <button class="composer-tool" id="emojiButton" type="button" aria-label="Quick emojis"
                 aria-expanded="false" aria-controls="emojiPicker">☺</button>
-        <button class="composer-tool" id="imageButton" type="button" aria-label="Add image">＋</button>
-        <input id="imageInput" type="file" accept="image/*" hidden>
         <div class="input-wrap">
           <input id="messageInput" autocomplete="off" enterkeyhint="send"
                  aria-label="Message" placeholder="Message">
@@ -462,6 +447,30 @@
         <span>Admin mode<small>Transfer controls and diagnostics</small></span>
         <span class="admin-arrow" aria-hidden="true">›</span>
       </a>
+      <section class="delete-card" aria-label="Delete saved content">
+        <button class="delete-action" id="askDeleteData" type="button"
+                aria-expanded="false" aria-controls="deleteDataConfirm">
+          <span>
+            <strong>Delete all content</strong>
+            <small>Chats, messages, identity, and local settings</small>
+          </span>
+          <svg class="trash-icon" viewBox="0 0 24 24" aria-hidden="true" fill="none"
+               stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 7h16"></path>
+            <path d="M9 7V4h6v3"></path>
+            <path d="M6.5 7l.8 13h9.4l.8-13"></path>
+            <path d="M10 11v5M14 11v5"></path>
+          </svg>
+        </button>
+        <div class="delete-confirm" id="deleteDataConfirm" hidden>
+          <strong>Delete everything saved on this device?</strong>
+          <p>This cannot be undone. Copies already synced to other phones will remain there.</p>
+          <div class="delete-confirm-actions">
+            <button class="delete-cancel" id="cancelDeleteData" type="button">Cancel</button>
+            <button class="delete-everything" id="confirmDeleteData" type="button">Delete everything</button>
+          </div>
+        </div>
+      </section>
     </div>
   </section>
 </div>
@@ -533,17 +542,11 @@
 const $ = selector => document.querySelector(selector);
 const MAX_TEXT = 50;
 const MAX_URL_TEXT = 200;
-const MAX_SOURCE_IMAGE_BYTES = 20 * 1024 * 1024;
-const TARGET_IMAGE_BYTES = 50 * 1024;
-const MAX_IMAGE_BYTES = 80 * 1024;
-const MAX_IMAGE_DIMENSION = 600;
-const IMAGE_DIMENSIONS = [600, 520, 440];
-const IMAGE_QUALITIES = [0.72, 0.62, 0.52, 0.42];
 const STORAGE_IDENTITY = 'nearchat-v2-identity';
 const STORAGE_CHATS = 'nearchat-v3-chats';
 const STORAGE_MESSAGES_LEGACY = 'nearchat-v2-messages';
 const STORAGE_SETTINGS = 'nearchat-v4-settings';
-const PROTOCOL = 'NC5';
+const PROTOCOL = 'NC4';
 const QR_VERSION = 20;
 const QR_CHUNK_BYTES = 570;
 const SYNC_FPS = 12;
@@ -620,37 +623,13 @@ function sliceGraphemes(text, limit) {
   return splitGraphemes(text).slice(0, limit).join('');
 }
 
-function safeImage(value) {
-  if (!value || typeof value !== 'object' || typeof value.dataUrl !== 'string') return null;
-  const prefix = /^data:image\/(webp|jpeg|png);base64,/i.exec(value.dataUrl);
-  if (!prefix) return null;
-  const encoded = value.dataUrl.slice(prefix[0].length);
-  if (!encoded || encoded.length > Math.ceil(MAX_IMAGE_BYTES * 4 / 3) + 4 ||
-      !/^[A-Za-z0-9+/]*={0,2}$/.test(encoded)) return null;
-  const padding = encoded.endsWith('==') ? 2 : encoded.endsWith('=') ? 1 : 0;
-  const bytes = Math.floor(encoded.length * 3 / 4) - padding;
-  const width = Number(value.width);
-  const height = Number(value.height);
-  if (bytes < 1 || bytes > MAX_IMAGE_BYTES ||
-      !Number.isInteger(width) || !Number.isInteger(height) ||
-      width < 1 || height < 1 || Math.max(width, height) > MAX_IMAGE_DIMENSION) return null;
-  return {
-    dataUrl: value.dataUrl,
-    mime: `image/${prefix[1].toLowerCase()}`,
-    width,
-    height,
-    bytes
-  };
-}
-
 function safeMessage(value) {
   if (!value || typeof value !== 'object') return null;
   if (typeof value.id !== 'string' || typeof value.sender !== 'string' ||
       typeof value.name !== 'string') return null;
   const trimmed = typeof value.text === 'string' ? value.text.trim() : '';
   const text = sliceGraphemes(trimmed, messageLimit(trimmed));
-  const image = safeImage(value.image);
-  if (!text && !image) return null;
+  if (!text) return null;
   const timestamp = Number(value.ts);
   const validTimestamp = Number.isFinite(timestamp) && timestamp >= 0 && timestamp <= 8640000000000000;
   return {
@@ -658,7 +637,6 @@ function safeMessage(value) {
     sender: value.sender.slice(0, 80),
     name: value.name.slice(0, 32),
     text,
-    ...(image ? { image } : {}),
     ts: validTimestamp ? timestamp : Date.now()
   };
 }
@@ -725,6 +703,7 @@ if (!chats.length) {
     writeJson(STORAGE_CHATS, chats);
   }
 }
+writeJson(STORAGE_CHATS, chats);
 
 let activeChatId = null;
 
@@ -758,7 +737,7 @@ function firstMessageTitle(chat) {
   if (!first) return null;
   const words = first.text.trim().split(/\s+/).filter(Boolean).slice(0, 2);
   if (words.length) return sliceGraphemes(words.join(' '), 28);
-  return first.image ? 'Photo group' : null;
+  return null;
 }
 
 function chatTitle(chat) {
@@ -853,14 +832,9 @@ function renderChatList() {
     time.textContent = formatListTime(last?.ts ?? chat.updatedAt);
     const preview = document.createElement('span');
     preview.className = 'chat-preview';
-    if (last) {
-      const summary = last.image
-        ? `📷${last.text ? ` ${last.text}` : ' Photo'}`
-        : last.text;
-      preview.textContent = `${last.sender === identity.id ? 'You' : last.name}: ${summary}`;
-    } else {
-      preview.textContent = 'No messages yet';
-    }
+    preview.textContent = last
+      ? `${last.sender === identity.id ? 'You' : last.name}: ${last.text}`
+      : 'No messages yet';
     copy.append(title, time, preview);
     row.append(avatar, copy);
     list.appendChild(row);
@@ -908,24 +882,10 @@ function renderMessages() {
       bubble.appendChild(sender);
     }
 
-    if (item.image) {
-      bubble.classList.add('has-image');
-      const image = document.createElement('img');
-      image.className = 'message-image';
-      image.src = item.image.dataUrl;
-      image.width = item.image.width;
-      image.height = item.image.height;
-      image.loading = 'lazy';
-      image.decoding = 'async';
-      image.alt = `Shared by ${item.name}`;
-      bubble.appendChild(image);
-    }
-    if (item.text) {
-      const text = document.createElement('div');
-      text.className = 'text';
-      appendLinkifiedText(text, item.text);
-      bubble.appendChild(text);
-    }
+    const text = document.createElement('div');
+    text.className = 'text';
+    appendLinkifiedText(text, item.text);
+    bubble.appendChild(text);
     const meta = document.createElement('div');
     meta.className = 'meta';
     meta.textContent = formatTime(item.ts);
@@ -943,7 +903,6 @@ function openChat(chatId, focusComposer = false) {
   $('#chatListScreen').hidden = true;
   $('#conversationScreen').hidden = false;
   $('#messageInput').value = '';
-  clearAttachment();
   closeEmojiPicker();
   updateComposer();
   updateConversationHeader();
@@ -953,7 +912,6 @@ function openChat(chatId, focusComposer = false) {
 
 function showChatList() {
   stopSyncActivity();
-  clearAttachment();
   closeEmojiPicker();
   activeChatId = null;
   $('#conversationScreen').hidden = true;
@@ -980,10 +938,6 @@ function createChat() {
   openChat(chat.id, true);
 }
 
-let selectedImage = null;
-let imageProcessing = false;
-let imageProcessingGeneration = 0;
-
 function closeEmojiPicker() {
   $('#emojiPicker').hidden = true;
   $('#emojiButton').setAttribute('aria-expanded', 'false');
@@ -1003,26 +957,6 @@ function renderQuickEmojis() {
   }
 }
 
-function clearAttachment() {
-  imageProcessingGeneration++;
-  imageProcessing = false;
-  selectedImage = null;
-  $('#attachmentPreview').hidden = true;
-  $('#attachmentPreviewImage').removeAttribute('src');
-  $('#attachmentMeta').textContent = '';
-  $('#imageInput').value = '';
-  updateComposer();
-}
-
-function showAttachment(image) {
-  selectedImage = image;
-  $('#attachmentPreviewImage').src = image.dataUrl;
-  $('#attachmentMeta').textContent =
-    `${image.width}×${image.height} · ${Math.ceil(image.bytes / 1024)} KiB · ${image.mime.split('/')[1].toUpperCase()}`;
-  $('#attachmentPreview').hidden = false;
-  updateComposer();
-}
-
 function updateComposer() {
   const value = $('#messageInput').value;
   const length = graphemeLength(value);
@@ -1032,9 +966,7 @@ function updateComposer() {
   counter.classList.toggle('near', length >= limit - 10 && length < limit);
   counter.classList.toggle('full', length >= limit);
   $('#messageInput').setAttribute('aria-invalid', String(length > limit));
-  $('#sendButton').disabled =
-    imageProcessing || (!value.trim() && !selectedImage) || length > limit;
-  $('#imageButton').disabled = imageProcessing;
+  $('#sendButton').disabled = !value.trim() || length > limit;
 }
 
 $('#composer').addEventListener('submit', event => {
@@ -1042,7 +974,7 @@ $('#composer').addEventListener('submit', event => {
   const chat = activeChat();
   if (!chat) return;
   const text = $('#messageInput').value.trim();
-  if (!text && !selectedImage) return;
+  if (!text) return;
   const limit = messageLimit(text);
   if (graphemeLength(text) > limit) {
     showToast(`Message is over the ${limit}-character limit.`);
@@ -1055,7 +987,6 @@ $('#composer').addEventListener('submit', event => {
     sender: identity.id,
     name: identity.name,
     text,
-    ...(selectedImage ? { image: selectedImage } : {}),
     ts: Date.now()
   };
   chat.messages.push(message);
@@ -1063,13 +994,12 @@ $('#composer').addEventListener('submit', event => {
   if (!saveChats()) {
     chat.messages.pop();
     chat.updatedAt = previousUpdatedAt;
-    showToast('This device is out of storage. Delete old chats or images.');
+    showToast('This device is out of storage. Delete old chats.');
     return;
   }
   updateConversationHeader();
   renderMessages();
   $('#messageInput').value = '';
-  clearAttachment();
   closeEmojiPicker();
   updateComposer();
   $('#messageInput').focus();
@@ -1108,146 +1038,6 @@ $('#emojiPicker').addEventListener('click', event => {
   updateComposer();
   input.focus();
 });
-$('#imageButton').addEventListener('click', () => {
-  closeEmojiPicker();
-  $('#imageInput').click();
-});
-$('#removeAttachment').addEventListener('click', clearAttachment);
-
-function loadImageFile(file) {
-  return new Promise((resolve, reject) => {
-    const url = URL.createObjectURL(file);
-    const image = new Image();
-    image.onload = () => {
-      URL.revokeObjectURL(url);
-      resolve(image);
-    };
-    image.onerror = () => {
-      URL.revokeObjectURL(url);
-      reject(new Error('This image could not be opened.'));
-    };
-    image.src = url;
-  });
-}
-
-function drawScaledImage(source, maxDimension, opaque = false) {
-  const scale = Math.min(1, maxDimension / Math.max(source.naturalWidth, source.naturalHeight));
-  const width = Math.max(1, Math.round(source.naturalWidth * scale));
-  const height = Math.max(1, Math.round(source.naturalHeight * scale));
-  const canvas = document.createElement('canvas');
-  canvas.width = width;
-  canvas.height = height;
-  const context = canvas.getContext('2d');
-  context.imageSmoothingEnabled = true;
-  context.imageSmoothingQuality = 'high';
-  if (opaque) {
-    context.fillStyle = '#fff';
-    context.fillRect(0, 0, width, height);
-  }
-  context.drawImage(source, 0, 0, width, height);
-  return canvas;
-}
-
-function canvasToBlob(canvas, type, quality) {
-  return new Promise(resolve => canvas.toBlob(resolve, type, quality));
-}
-
-function blobToDataUrl(blob) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result);
-    reader.onerror = () => reject(new Error('The optimized image could not be read.'));
-    reader.readAsDataURL(blob);
-  });
-}
-
-async function optimizeImage(file) {
-  if (!file || !file.type.startsWith('image/'))
-    throw new Error('Choose an image file.');
-  if (file.size > MAX_SOURCE_IMAGE_BYTES)
-    throw new Error('Choose an image smaller than 20 MiB.');
-
-  const source = await loadImageFile(file);
-  if (!source.naturalWidth || !source.naturalHeight)
-    throw new Error('This image has no usable pixels.');
-
-  let best = null;
-  const triedSizes = new Set();
-  for (const maxDimension of IMAGE_DIMENSIONS) {
-    const transparent = drawScaledImage(source, maxDimension);
-    const key = `${transparent.width}x${transparent.height}`;
-    if (triedSizes.has(key)) continue;
-    triedSizes.add(key);
-
-    const opaque = drawScaledImage(source, maxDimension, true);
-    const png = await canvasToBlob(transparent, 'image/png');
-    for (let index = 0; index < IMAGE_QUALITIES.length; index++) {
-      const quality = IMAGE_QUALITIES[index];
-      const [webp, jpeg] = await Promise.all([
-        canvasToBlob(transparent, 'image/webp', quality),
-        canvasToBlob(opaque, 'image/jpeg', quality)
-      ]);
-      const candidates = [webp, jpeg];
-      if (index === 0) candidates.push(png);
-      const valid = candidates.filter(blob =>
-        blob && ['image/webp', 'image/jpeg', 'image/png'].includes(blob.type));
-      valid.sort((a, b) => a.size - b.size);
-      const smallest = valid[0];
-      if (!smallest) continue;
-      const candidate = {
-        blob: smallest,
-        width: transparent.width,
-        height: transparent.height
-      };
-      if (!best || candidate.blob.size < best.blob.size) best = candidate;
-      if (candidate.blob.size <= TARGET_IMAGE_BYTES) {
-        const dataUrl = await blobToDataUrl(candidate.blob);
-        return {
-          dataUrl,
-          mime: candidate.blob.type,
-          width: candidate.width,
-          height: candidate.height,
-          bytes: candidate.blob.size
-        };
-      }
-    }
-  }
-
-  if (!best || best.blob.size > MAX_IMAGE_BYTES)
-    throw new Error('This image could not be reduced below 80 KiB.');
-  const dataUrl = await blobToDataUrl(best.blob);
-  return {
-    dataUrl,
-    mime: best.blob.type,
-    width: best.width,
-    height: best.height,
-    bytes: best.blob.size
-  };
-}
-
-$('#imageInput').addEventListener('change', async event => {
-  const file = event.target.files?.[0];
-  event.target.value = '';
-  if (!file) return;
-  const chatId = activeChatId;
-  const generation = ++imageProcessingGeneration;
-  imageProcessing = true;
-  updateComposer();
-  showToast('Optimizing image…');
-  try {
-    const image = await optimizeImage(file);
-    if (generation !== imageProcessingGeneration || activeChatId !== chatId) return;
-    showAttachment(image);
-    showToast(`Photo ready · ${Math.ceil(image.bytes / 1024)} KiB`);
-  } catch (error) {
-    if (generation !== imageProcessingGeneration) return;
-    showToast(error.message);
-  } finally {
-    if (generation !== imageProcessingGeneration) return;
-    imageProcessing = false;
-    updateComposer();
-  }
-});
 
 $('#newChatButton').addEventListener('click', createChat);
 $('#backToChats').addEventListener('click', showChatList);
@@ -1283,16 +1073,84 @@ function renderSyncSetting() {
     : 'Off · Sync transfers all chats';
 }
 
+function setDeleteConfirmation(open) {
+  $('#askDeleteData').hidden = open;
+  $('#deleteDataConfirm').hidden = !open;
+  $('#askDeleteData').setAttribute('aria-expanded', String(open));
+  if (open) $('#confirmDeleteData').focus();
+}
+
+function closeSettingsPanel() {
+  setDeleteConfirmation(false);
+  closeOverlay($('#settingsOverlay'));
+}
+
+function requestDatabaseDeletion(name) {
+  return new Promise(resolve => {
+    const request = indexedDB.deleteDatabase(name);
+    request.onsuccess = () => resolve(true);
+    request.onerror = () => resolve(false);
+    request.onblocked = () => resolve(false);
+  });
+}
+
+async function clearAllSavedData() {
+  let complete = true;
+  try { localStorage.clear(); } catch { complete = false; }
+  try { sessionStorage.clear(); } catch { complete = false; }
+
+  if ('indexedDB' in window && indexedDB.databases) {
+    try {
+      const databases = await indexedDB.databases();
+      const names = databases.map(database => database.name).filter(Boolean);
+      const results = await Promise.all(names.map(requestDatabaseDeletion));
+      if (results.some(result => !result)) complete = false;
+    } catch {
+      complete = false;
+    }
+  }
+  return complete;
+}
+
 $('#settingsButton').addEventListener('click', () => openOverlay($('#settingsOverlay')));
-$('#closeSettings').addEventListener('click', () => closeOverlay($('#settingsOverlay')));
+$('#closeSettings').addEventListener('click', closeSettingsPanel);
 $('#settingsOverlay').addEventListener('click', event => {
-  if (event.target === $('#settingsOverlay')) closeOverlay($('#settingsOverlay'));
+  if (event.target === $('#settingsOverlay')) closeSettingsPanel();
 });
 $('#syncScopeToggle').addEventListener('click', () => {
   appSettings.syncOpenChatOnly = !appSettings.syncOpenChatOnly;
   writeJson(STORAGE_SETTINGS, appSettings);
   renderSyncSetting();
   showToast(appSettings.syncOpenChatOnly ? 'Syncing the open chat only' : 'Syncing all chats');
+});
+$('#askDeleteData').addEventListener('click', () => setDeleteConfirmation(true));
+$('#cancelDeleteData').addEventListener('click', () => {
+  setDeleteConfirmation(false);
+  $('#askDeleteData').focus();
+});
+$('#confirmDeleteData').addEventListener('click', async () => {
+  const confirmButton = $('#confirmDeleteData');
+  const cancelButton = $('#cancelDeleteData');
+  confirmButton.disabled = true;
+  cancelButton.disabled = true;
+  confirmButton.textContent = 'Deleting…';
+  const complete = await clearAllSavedData();
+
+  chats = [];
+  activeChatId = null;
+  appSettings = { syncOpenChatOnly: false };
+  identity = makeIdentity();
+  writeJson(STORAGE_IDENTITY, identity);
+  setIdentityUi();
+  renderSyncSetting();
+  renderChatList();
+
+  confirmButton.disabled = false;
+  cancelButton.disabled = false;
+  confirmButton.textContent = 'Delete everything';
+  setDeleteConfirmation(false);
+  closeSettingsPanel();
+  showToast(complete ? 'All saved content deleted' : 'Chats deleted; some browser data could not be cleared');
 });
 
 /* ---------- sync payload ---------- */
@@ -1350,7 +1208,7 @@ async function buildSyncFrames() {
   if (!saveChats()) throw new Error('Not enough storage to prepare this sync.');
 
   const encoded = await encodeTransferPayload({
-    version: 5,
+    version: 4,
     activeChatId,
     chats: selectedChats
   });
@@ -1658,7 +1516,7 @@ function mergeConversations(payload) {
   if (!saveChats()) {
     chats = previousChats;
     activeChatId = previousActiveChatId;
-    throw new Error('Not enough storage for these chats and images.');
+    throw new Error('Not enough storage for these chats.');
   }
   renderChatList();
   if (activeChat()) {
@@ -1844,7 +1702,14 @@ $('#finishSync').addEventListener('click', closeSync);
 document.addEventListener('keydown', event => {
   if (event.key !== 'Escape') return;
   if (!$('#syncOverlay').hidden) closeSync();
-  else if (!$('#settingsOverlay').hidden) closeOverlay($('#settingsOverlay'));
+  else if (!$('#settingsOverlay').hidden) {
+    if (!$('#deleteDataConfirm').hidden) {
+      setDeleteConfirmation(false);
+      $('#askDeleteData').focus();
+    } else {
+      closeSettingsPanel();
+    }
+  }
   else if (!$('#emojiPicker').hidden) closeEmojiPicker();
 });
 
