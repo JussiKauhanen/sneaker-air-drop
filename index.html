@@ -36,6 +36,7 @@
     width:100%;height:100dvh;max-width:560px;margin:0 auto;background:var(--paper);
     display:flex;flex-direction:column;overflow:hidden;box-shadow:var(--shadow);
   }
+  .screen{position:relative;width:100%;height:100%;min-height:0;display:flex;flex-direction:column}
 
   .topbar{
     min-height:64px;padding:10px 10px 10px 14px;background:var(--green);color:#fff;
@@ -65,6 +66,48 @@
     display:grid;place-items:center;font-size:22px;line-height:1;
   }
   .icon-btn:hover{background:rgba(255,255,255,.12)}
+  .back-btn{
+    width:38px;height:42px;margin-left:-6px;border-radius:50%;background:transparent;color:#fff;
+    display:grid;place-items:center;font-size:27px;line-height:1;flex:none;
+  }
+  .back-btn:hover{background:rgba(255,255,255,.12)}
+
+  .chat-list{
+    flex:1;min-height:0;overflow-y:auto;background:#fff;overscroll-behavior:contain;
+    padding-bottom:96px;
+  }
+  .list-empty{
+    min-height:100%;display:grid;place-items:center;text-align:center;color:var(--muted);
+    padding:38px;
+  }
+  .list-empty .empty-inner{max-width:290px}
+  .list-empty strong{display:block;color:#34434b;font-size:16px}
+  .list-empty p{font-size:13px;line-height:1.55;margin:7px 0 0}
+  .chat-row{
+    width:100%;min-height:76px;padding:10px 14px;background:#fff;color:var(--ink);
+    display:grid;grid-template-columns:52px minmax(0,1fr);gap:12px;text-align:left;
+  }
+  .chat-row:hover{background:#f5f7f6}
+  .chat-avatar{
+    width:50px;height:50px;border-radius:50%;background:#dce9e5;color:var(--green);
+    display:grid;place-items:center;font-size:15px;font-weight:800;letter-spacing:.03em;
+  }
+  .chat-copy{
+    min-width:0;padding:3px 0 11px;border-bottom:1px solid #edf0ef;
+    display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:10px;align-content:center;
+  }
+  .chat-title{font-size:16px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .chat-time{font-size:11px;color:#849198;white-space:nowrap;padding-top:2px}
+  .chat-preview{
+    grid-column:1/-1;margin-top:5px;color:var(--muted);font-size:13px;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  }
+  .fab{
+    position:absolute;right:20px;bottom:calc(22px + env(safe-area-inset-bottom));
+    width:56px;height:56px;border-radius:17px;background:var(--green);color:#fff;
+    display:grid;place-items:center;font-size:28px;box-shadow:0 5px 18px rgba(7,94,84,.3);
+  }
+  .fab:hover{background:var(--green-dark)}
 
   .thread{
     position:relative;flex:1;overflow-y:auto;padding:18px 12px 22px;
@@ -247,41 +290,65 @@
 </head>
 <body>
 <main class="app">
-  <header class="topbar">
-    <div class="identity">
-      <div class="avatar" id="headerAvatar"></div>
-      <div class="identity-copy">
-        <strong>NearChat</strong>
-        <span id="headerName"></span>
+  <section class="screen" id="chatListScreen">
+    <header class="topbar">
+      <div class="identity">
+        <div class="avatar" id="headerAvatar"></div>
+        <div class="identity-copy">
+          <strong>NearChat</strong>
+          <span id="headerName"></span>
+        </div>
       </div>
-    </div>
-    <div class="top-actions">
+      <button class="icon-btn" id="settingsButton" type="button" aria-label="Settings">•••</button>
+    </header>
+    <section class="chat-list" aria-label="Chats">
+      <div class="list-empty" id="listEmpty">
+        <div class="empty-inner">
+          <div class="empty-mark" aria-hidden="true">✦</div>
+          <strong>No chats yet</strong>
+          <p>Start a chat, write a short message, then sync phones face to face.</p>
+        </div>
+      </div>
+      <div id="chatList"></div>
+    </section>
+    <button class="fab" id="newChatButton" type="button" aria-label="New chat">＋</button>
+  </section>
+
+  <section class="screen" id="conversationScreen" hidden>
+    <header class="topbar">
+      <div class="identity">
+        <button class="back-btn" id="backToChats" type="button" aria-label="Back to chats">‹</button>
+        <div class="avatar" id="chatAvatar"></div>
+        <div class="identity-copy">
+          <strong id="chatTitle">New chat</strong>
+          <span id="chatSubtitle">Local conversation</span>
+        </div>
+      </div>
       <button class="sync-btn" id="syncButton" type="button">
         <span class="sync-icon" aria-hidden="true">↻</span><span>Sync</span>
       </button>
-      <button class="icon-btn" id="settingsButton" type="button" aria-label="Settings">•••</button>
-    </div>
-  </header>
+    </header>
 
-  <section class="thread" id="thread" aria-label="Conversation">
-    <div class="empty" id="emptyState">
-      <div class="empty-inner">
-        <div class="empty-mark" aria-hidden="true">✦</div>
-        <strong>Your private local chat</strong>
-        <p>Write a short message, then sync phones face to face. Nothing is uploaded.</p>
+    <section class="thread" id="thread" aria-label="Conversation">
+      <div class="empty" id="emptyState">
+        <div class="empty-inner">
+          <div class="empty-mark" aria-hidden="true">✦</div>
+          <strong>New private chat</strong>
+          <p>Write a message, or tap Sync to join someone else’s chat. Nothing is uploaded.</p>
+        </div>
       </div>
-    </div>
-    <div id="messageList"></div>
-  </section>
+      <div id="messageList"></div>
+    </section>
 
-  <form class="composer" id="composer">
-    <div class="input-wrap">
-      <input id="messageInput" maxlength="50" autocomplete="off" enterkeyhint="send"
-             aria-label="Message" placeholder="Message">
-      <span class="counter" id="counter">0/50</span>
-    </div>
-    <button class="send-btn" id="sendButton" type="submit" aria-label="Send message" disabled>↑</button>
-  </form>
+    <form class="composer" id="composer">
+      <div class="input-wrap">
+        <input id="messageInput" maxlength="50" autocomplete="off" enterkeyhint="send"
+               aria-label="Message" placeholder="Message">
+        <span class="counter" id="counter">0/50</span>
+      </div>
+      <button class="send-btn" id="sendButton" type="submit" aria-label="Send message" disabled>↑</button>
+    </form>
+  </section>
 </main>
 
 <div class="overlay" id="settingsOverlay" hidden>
@@ -299,7 +366,7 @@
         </div>
       </div>
       <div class="settings-label">Advanced</div>
-      <a class="admin-link" href="../index.html#/">
+      <a class="admin-link" href="test-harness/index.html#/">
         <span>Admin mode<small>Transfer controls and diagnostics</small></span>
         <span class="admin-arrow" aria-hidden="true">›</span>
       </a>
@@ -315,11 +382,11 @@
     </header>
 
     <div class="sheet-body" id="syncChoose">
-      <p class="sheet-copy">Put the phones near each other. One phone shows its chat; the other scans it.</p>
+      <p class="sheet-copy">Put the phones near each other. One phone shows this chat; the other scans it.</p>
       <div class="choice-grid">
         <button class="choice" id="showCode" type="button">
           <span class="choice-icon" aria-hidden="true">▦</span>
-          <strong>Show my chat</strong>
+          <strong>Show this chat</strong>
           <span>Display a moving sync code.</span>
         </button>
         <button class="choice" id="scanCode" type="button">
@@ -374,8 +441,9 @@
 const $ = selector => document.querySelector(selector);
 const MAX_TEXT = 50;
 const STORAGE_IDENTITY = 'nearchat-v2-identity';
-const STORAGE_MESSAGES = 'nearchat-v2-messages';
-const PROTOCOL = 'NC2';
+const STORAGE_CHATS = 'nearchat-v3-chats';
+const STORAGE_MESSAGES_LEGACY = 'nearchat-v2-messages';
+const PROTOCOL = 'NC3';
 const QR_VERSION = 20;
 const QR_CHUNK_BYTES = 570;
 const SYNC_FPS = 12;
@@ -429,12 +497,43 @@ function safeMessage(value) {
   const text = value.text.trim().slice(0, MAX_TEXT);
   if (!text) return null;
   const timestamp = Number(value.ts);
+  const validTimestamp = Number.isFinite(timestamp) && timestamp >= 0 && timestamp <= 8640000000000000;
   return {
     id: value.id.slice(0, 100),
     sender: value.sender.slice(0, 80),
     name: value.name.slice(0, 32),
     text,
-    ts: Number.isFinite(timestamp) ? timestamp : Date.now()
+    ts: validTimestamp ? timestamp : Date.now()
+  };
+}
+
+function safeParticipant(value) {
+  if (!value || typeof value.id !== 'string' || typeof value.name !== 'string') return null;
+  return { id: value.id.slice(0, 80), name: value.name.slice(0, 32) };
+}
+
+function safeChat(value) {
+  if (!value || typeof value.id !== 'string' || !Array.isArray(value.messages)) return null;
+  const messages = value.messages.map(safeMessage).filter(Boolean);
+  messages.sort((a, b) => a.ts - b.ts || a.id.localeCompare(b.id));
+  const participantMap = new Map();
+  if (Array.isArray(value.participants)) {
+    for (const item of value.participants) {
+      const participant = safeParticipant(item);
+      if (participant) participantMap.set(participant.id, participant);
+    }
+  }
+  for (const message of messages)
+    participantMap.set(message.sender, { id: message.sender, name: message.name });
+  const created = Number(value.createdAt);
+  const updated = Number(value.updatedAt);
+  const fallbackTime = messages[0]?.ts ?? Date.now();
+  return {
+    id: value.id.slice(0, 100),
+    createdAt: Number.isFinite(created) ? created : fallbackTime,
+    updatedAt: Number.isFinite(updated) ? updated : (messages.at(-1)?.ts ?? fallbackTime),
+    participants: [...participantMap.values()],
+    messages
   };
 }
 
@@ -444,8 +543,29 @@ if (!identity) {
   writeJson(STORAGE_IDENTITY, identity);
 }
 
-let messages = readJson(STORAGE_MESSAGES, []).map(safeMessage).filter(Boolean);
-messages.sort((a, b) => a.ts - b.ts || a.id.localeCompare(b.id));
+let chats = readJson(STORAGE_CHATS, []);
+chats = Array.isArray(chats) ? chats.map(safeChat).filter(Boolean) : [];
+
+if (!chats.length) {
+  const legacy = readJson(STORAGE_MESSAGES_LEGACY, []);
+  const legacyMessages = Array.isArray(legacy) ? legacy.map(safeMessage).filter(Boolean) : [];
+  if (legacyMessages.length) {
+    legacyMessages.sort((a, b) => a.ts - b.ts || a.id.localeCompare(b.id));
+    const participants = new Map([[identity.id, identity]]);
+    for (const message of legacyMessages)
+      participants.set(message.sender, { id: message.sender, name: message.name });
+    chats.push({
+      id: `legacy-${identity.id}`,
+      createdAt: legacyMessages[0].ts,
+      updatedAt: legacyMessages.at(-1).ts,
+      participants: [...participants.values()],
+      messages: legacyMessages
+    });
+    writeJson(STORAGE_CHATS, chats);
+  }
+}
+
+let activeChatId = null;
 
 function initials(name) {
   return name.split(/\s+/).map(part => part[0]).join('').slice(0, 2).toUpperCase();
@@ -456,6 +576,32 @@ function setIdentityUi() {
   $('#settingsName').textContent = identity.name;
   $('#headerAvatar').textContent = initials(identity.name);
   $('#settingsAvatar').textContent = initials(identity.name);
+}
+
+function saveChats() {
+  writeJson(STORAGE_CHATS, chats);
+}
+
+function activeChat() {
+  return chats.find(chat => chat.id === activeChatId) ?? null;
+}
+
+function ensureLocalParticipant(chat) {
+  if (!chat.participants.some(participant => participant.id === identity.id))
+    chat.participants.push(identity);
+}
+
+function chatTitle(chat) {
+  const others = chat.participants.filter(participant => participant.id !== identity.id);
+  if (!others.length) return 'New chat';
+  if (others.length === 1) return others[0].name;
+  const names = others.slice(0, 2).map(participant => participant.name);
+  return others.length > 2 ? `${names.join(', ')} +${others.length - 2}` : names.join(', ');
+}
+
+function chatInitials(chat) {
+  const title = chatTitle(chat);
+  return title === 'New chat' ? '+' : initials(title);
 }
 
 function formatTime(timestamp) {
@@ -472,13 +618,69 @@ function formatDay(timestamp) {
   return new Intl.DateTimeFormat([], { month: 'short', day: 'numeric' }).format(date);
 }
 
+function formatListTime(timestamp) {
+  const date = new Date(timestamp);
+  const today = new Date();
+  if (date.toDateString() === today.toDateString()) return formatTime(timestamp);
+  return new Intl.DateTimeFormat([], { month: 'short', day: 'numeric' }).format(date);
+}
+
+function renderChatList() {
+  const list = $('#chatList');
+  list.replaceChildren();
+  const ordered = [...chats].sort((a, b) => b.updatedAt - a.updatedAt || b.id.localeCompare(a.id));
+  $('#listEmpty').hidden = ordered.length > 0;
+
+  for (const chat of ordered) {
+    const last = chat.messages.at(-1);
+    const row = document.createElement('button');
+    row.type = 'button';
+    row.className = 'chat-row';
+    row.dataset.chatId = chat.id;
+
+    const avatar = document.createElement('span');
+    avatar.className = 'chat-avatar';
+    avatar.textContent = chatInitials(chat);
+
+    const copy = document.createElement('span');
+    copy.className = 'chat-copy';
+    const title = document.createElement('span');
+    title.className = 'chat-title';
+    title.textContent = chatTitle(chat);
+    const time = document.createElement('span');
+    time.className = 'chat-time';
+    time.textContent = formatListTime(last?.ts ?? chat.updatedAt);
+    const preview = document.createElement('span');
+    preview.className = 'chat-preview';
+    preview.textContent = last
+      ? `${last.sender === identity.id ? 'You' : last.name}: ${last.text}`
+      : 'No messages yet';
+    copy.append(title, time, preview);
+    row.append(avatar, copy);
+    list.appendChild(row);
+  }
+}
+
+function updateConversationHeader() {
+  const chat = activeChat();
+  if (!chat) return;
+  $('#chatTitle').textContent = chatTitle(chat);
+  $('#chatAvatar').textContent = chatInitials(chat);
+  const count = chat.messages.length;
+  $('#chatSubtitle').textContent = count
+    ? `${count} message${count === 1 ? '' : 's'} · local`
+    : 'Local conversation';
+}
+
 function renderMessages() {
+  const chat = activeChat();
   const list = $('#messageList');
   list.replaceChildren();
-  $('#emptyState').hidden = messages.length > 0;
+  $('#emptyState').hidden = Boolean(chat?.messages.length);
+  if (!chat) return;
   let lastDay = '';
 
-  for (const item of messages) {
+  for (const item of chat.messages) {
     const day = new Date(item.ts).toDateString();
     if (day !== lastDay) {
       const label = document.createElement('div');
@@ -514,8 +716,39 @@ function renderMessages() {
   requestAnimationFrame(() => { $('#thread').scrollTop = $('#thread').scrollHeight; });
 }
 
-function saveMessages() {
-  writeJson(STORAGE_MESSAGES, messages);
+function openChat(chatId, focusComposer = false) {
+  if (!chats.some(chat => chat.id === chatId)) return;
+  activeChatId = chatId;
+  $('#chatListScreen').hidden = true;
+  $('#conversationScreen').hidden = false;
+  $('#messageInput').value = '';
+  updateComposer();
+  updateConversationHeader();
+  renderMessages();
+  if (focusComposer) requestAnimationFrame(() => $('#messageInput').focus());
+}
+
+function showChatList() {
+  stopSyncActivity();
+  activeChatId = null;
+  $('#conversationScreen').hidden = true;
+  $('#chatListScreen').hidden = false;
+  renderChatList();
+}
+
+function createChat() {
+  const now = Date.now();
+  const chat = {
+    id: randomId(),
+    createdAt: now,
+    updatedAt: now,
+    participants: [identity],
+    messages: []
+  };
+  chats.push(chat);
+  saveChats();
+  renderChatList();
+  openChat(chat.id, true);
 }
 
 function updateComposer() {
@@ -529,22 +762,33 @@ function updateComposer() {
 
 $('#composer').addEventListener('submit', event => {
   event.preventDefault();
+  const chat = activeChat();
+  if (!chat) return;
   const text = $('#messageInput').value.trim().slice(0, MAX_TEXT);
   if (!text) return;
-  messages.push({
+  ensureLocalParticipant(chat);
+  chat.messages.push({
     id: `${identity.id}:${Date.now().toString(36)}:${Math.random().toString(36).slice(2, 7)}`,
     sender: identity.id,
     name: identity.name,
     text,
     ts: Date.now()
   });
-  saveMessages();
+  chat.updatedAt = chat.messages.at(-1).ts;
+  saveChats();
+  updateConversationHeader();
   renderMessages();
   $('#messageInput').value = '';
   updateComposer();
   $('#messageInput').focus();
 });
 $('#messageInput').addEventListener('input', updateComposer);
+$('#newChatButton').addEventListener('click', createChat);
+$('#backToChats').addEventListener('click', showChatList);
+$('#chatList').addEventListener('click', event => {
+  const row = event.target.closest('[data-chat-id]');
+  if (row) openChat(row.dataset.chatId);
+});
 
 let toastTimer = 0;
 function showToast(text) {
@@ -592,10 +836,12 @@ function makeSession() {
 }
 
 function buildSyncFrames() {
+  const chat = activeChat();
+  if (!chat) throw new Error('Open a chat before syncing.');
+  ensureLocalParticipant(chat);
   const payload = new TextEncoder().encode(JSON.stringify({
-    version: 2,
-    owner: identity,
-    messages
+    version: 3,
+    chat
   }));
   const chunks = [];
   for (let start = 0; start < payload.length; start += QR_CHUNK_BYTES)
@@ -698,8 +944,10 @@ async function startSender() {
     senderLastFrame = 0;
     $('#qrLoading').hidden = true;
     $('#syncQr').hidden = false;
+    const chat = activeChat();
+    const messageCount = chat?.messages.length ?? 0;
     $('#sendStatus').textContent =
-      `${messages.length} message${messages.length === 1 ? '' : 's'} · ${senderFrames.length} code frame${senderFrames.length === 1 ? '' : 's'}`;
+      `${messageCount} message${messageCount === 1 ? '' : 's'} · ${senderFrames.length} code frame${senderFrames.length === 1 ? '' : 's'}`;
     requestWakeLock();
     senderRaf = requestAnimationFrame(senderLoop);
   } catch (error) {
@@ -777,14 +1025,14 @@ function updateScanProgress() {
   $('#scanStatus').textContent = total ? 'Receiving conversation…' : 'Looking for sync code…';
 }
 
-const FRAME_RE = /^NC2\|([a-z0-9]{6})\|([a-z0-9]+)\|([a-z0-9]+)\|([A-Za-z0-9+/=]*)$/;
+const FRAME_RE = /^NC([23])\|([a-z0-9]{6})\|([a-z0-9]+)\|([a-z0-9]+)\|([A-Za-z0-9+/=]*)$/;
 
 function ingestFrame(raw) {
   const match = FRAME_RE.exec(raw);
   if (!match) return;
-  const session = match[1];
-  const index = parseInt(match[2], 36);
-  const total = parseInt(match[3], 36);
+  const session = `${match[1]}:${match[2]}`;
+  const index = parseInt(match[3], 36);
+  const total = parseInt(match[4], 36);
   if (!Number.isInteger(index) || !Number.isInteger(total) ||
       total < 1 || index < 0 || index >= total || total > 10000) return;
 
@@ -794,28 +1042,72 @@ function ingestFrame(raw) {
     receiveChunks = new Map();
   }
   if (total !== receiveTotal || receiveChunks.has(index)) return;
-  try { receiveChunks.set(index, fromB64(match[4])); }
+  try { receiveChunks.set(index, fromB64(match[5])); }
   catch { return; }
   updateScanProgress();
   if (receiveChunks.size === receiveTotal) finishReceive();
 }
 
+function incomingChat(payload) {
+  if (payload?.version === 3) return safeChat(payload.chat);
+  if (payload?.version === 2 && Array.isArray(payload.messages)) {
+    const owner = safeIdentity(payload.owner);
+    const messages = payload.messages.map(safeMessage).filter(Boolean);
+    const participants = owner ? [owner] : [];
+    const firstSender = messages[0] ? { id: messages[0].sender, name: messages[0].name } : null;
+    if (firstSender && !participants.some(participant => participant.id === firstSender.id))
+      participants.push(firstSender);
+    return safeChat({
+      id: `legacy-${owner?.id ?? firstSender?.id ?? randomId()}`,
+      createdAt: messages[0]?.ts ?? Date.now(),
+      updatedAt: messages.at(-1)?.ts ?? Date.now(),
+      participants,
+      messages
+    });
+  }
+  return null;
+}
+
 function mergeConversation(payload) {
-  if (!payload || payload.version !== 2 || !Array.isArray(payload.messages))
-    throw new Error('This is not a NearChat conversation.');
-  const known = new Set(messages.map(message => message.id));
+  const incoming = incomingChat(payload);
+  if (!incoming) throw new Error('This is not a NearChat conversation.');
+  ensureLocalParticipant(incoming);
+
+  const draft = activeChat();
+  if (draft && draft.id !== incoming.id && draft.messages.length === 0 &&
+      draft.participants.every(participant => participant.id === identity.id)) {
+    chats = chats.filter(chat => chat.id !== draft.id);
+  }
+
+  let chat = chats.find(item => item.id === incoming.id);
+  const isNew = !chat;
   let added = 0;
-  for (const value of payload.messages) {
-    const message = safeMessage(value);
-    if (!message || known.has(message.id)) continue;
+  if (!chat) {
+    chat = incoming;
+    chats.push(chat);
+    added = chat.messages.length;
+  }
+
+  const participantMap = new Map(chat.participants.map(participant => [participant.id, participant]));
+  for (const participant of incoming.participants) participantMap.set(participant.id, participant);
+  participantMap.set(identity.id, identity);
+  chat.participants = [...participantMap.values()];
+
+  const known = new Set(chat.messages.map(message => message.id));
+  for (const message of incoming.messages) {
+    if (known.has(message.id)) continue;
     known.add(message.id);
-    messages.push(message);
+    chat.messages.push(message);
     added++;
   }
-  messages.sort((a, b) => a.ts - b.ts || a.id.localeCompare(b.id));
-  saveMessages();
+  chat.messages.sort((a, b) => a.ts - b.ts || a.id.localeCompare(b.id));
+  chat.updatedAt = Math.max(chat.updatedAt, incoming.updatedAt, chat.messages.at(-1)?.ts ?? 0);
+  activeChatId = chat.id;
+  saveChats();
+  renderChatList();
+  updateConversationHeader();
   renderMessages();
-  return added;
+  return { added, chat, isNew };
 }
 
 function finishReceive() {
@@ -830,13 +1122,15 @@ function finishReceive() {
       offset += chunk.length;
     }
     const payload = JSON.parse(new TextDecoder().decode(combined));
-    const added = mergeConversation(payload);
+    const result = mergeConversation(payload);
     stopScanner();
-    $('#doneText').textContent = added
-      ? `${added} new message${added === 1 ? '' : 's'} added. Send the merged chat back to finish a two-way sync.`
-      : 'Both phones already have the same messages. You can still sync back to confirm.';
+    $('#doneText').textContent = result.added
+      ? `${result.added} new message${result.added === 1 ? '' : 's'} added to ${chatTitle(result.chat)}. Send it back to finish a two-way sync.`
+      : result.isNew
+        ? `${chatTitle(result.chat)} was added. Send it back to finish a two-way sync.`
+      : `${chatTitle(result.chat)} is already up to date. You can still sync back to confirm.`;
     setSyncView('done');
-    showToast(added ? `${added} new message${added === 1 ? '' : 's'}` : 'Already in sync');
+    showToast(result.added ? `${result.added} new message${result.added === 1 ? '' : 's'}` : 'Already in sync');
   } catch (error) {
     receiveSession = null;
     receiveTotal = 0;
@@ -931,6 +1225,7 @@ function setSyncView(name) {
 }
 
 function openSync() {
+  if (!activeChat()) return;
   setSyncView('choose');
   openOverlay($('#syncOverlay'));
 }
@@ -960,10 +1255,16 @@ document.addEventListener('keydown', event => {
 });
 
 window.addEventListener('storage', event => {
-  if (event.key !== STORAGE_MESSAGES) return;
-  messages = readJson(STORAGE_MESSAGES, []).map(safeMessage).filter(Boolean);
-  messages.sort((a, b) => a.ts - b.ts || a.id.localeCompare(b.id));
-  renderMessages();
+  if (event.key !== STORAGE_CHATS) return;
+  const stored = readJson(STORAGE_CHATS, []);
+  chats = Array.isArray(stored) ? stored.map(safeChat).filter(Boolean) : [];
+  renderChatList();
+  if (activeChat()) {
+    updateConversationHeader();
+    renderMessages();
+  } else if (!$('#conversationScreen').hidden) {
+    showChatList();
+  }
 });
 
 window.addEventListener('beforeunload', stopSyncActivity);
@@ -972,7 +1273,7 @@ document.addEventListener('visibilitychange', () => {
 });
 
 setIdentityUi();
-renderMessages();
+renderChatList();
 updateComposer();
 </script>
 </body>
