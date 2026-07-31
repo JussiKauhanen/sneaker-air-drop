@@ -46,6 +46,42 @@
   .report .k{color:var(--faint);letter-spacing:.06em}
   .report .v{text-align:right}
   .v.ok{color:var(--sense)} .v.no{color:var(--bad)} .v.warn{color:var(--emit)}
+  .danger-zone{
+    margin-top:30px;border:1px solid rgba(255,107,95,.48);border-radius:3px;
+    background:rgba(255,107,95,.055);padding:17px;
+  }
+  .danger-action{display:flex;align-items:center;justify-content:space-between;gap:20px}
+  .danger-copy h2{font-size:16px;margin:0;color:var(--fg)}
+  .danger-copy p{max-width:46ch;margin:6px 0 0;color:var(--dim);font-size:13px;line-height:1.5}
+  .danger-btn{
+    min-height:46px;flex:none;border:1px solid var(--bad);border-radius:3px;padding:0 14px;
+    display:flex;align-items:center;justify-content:center;gap:9px;color:var(--bad);
+    background:rgba(255,107,95,.08);font-family:var(--mono);font-size:11px;
+    letter-spacing:.1em;text-transform:uppercase;
+  }
+  .danger-btn:hover:not(:disabled){color:#fff;background:rgba(255,107,95,.2)}
+  .danger-btn svg{width:19px;height:19px;display:block}
+  .danger-confirm{font-size:13px;line-height:1.5;color:var(--dim)}
+  .danger-confirm strong{display:block;color:var(--bad);font-size:15px;margin-bottom:4px}
+  .danger-confirm p{margin:0}
+  .confirm-actions{display:flex;gap:8px;margin-top:14px}
+  .confirm-btn{
+    min-height:42px;border:1px solid var(--line-hi);border-radius:3px;padding:0 14px;
+    color:var(--dim);background:var(--ink-2);font-family:var(--mono);font-size:11px;
+    letter-spacing:.1em;text-transform:uppercase;
+  }
+  .confirm-btn:hover:not(:disabled){color:#fff;background:var(--ink-3)}
+  .confirm-btn.delete{border-color:var(--bad);color:#fff;background:var(--bad)}
+  .confirm-btn.delete:hover:not(:disabled){background:#d94f45}
+  .danger-result{color:var(--good);font-size:13px;line-height:1.5}
+  .danger-result strong{display:block;color:var(--good);font-size:15px;margin-bottom:4px}
+  .danger-result.err,.danger-result.err strong{color:var(--bad)}
+  @media(max-width:520px){
+    .danger-action{align-items:stretch;flex-direction:column}
+    .danger-btn{width:100%}
+    .confirm-actions{flex-direction:column-reverse}
+    .confirm-btn{width:100%}
+  }
 
   /* ---------- chips (shared) ---------- */
   .chip{
@@ -178,6 +214,35 @@
   <hr class="rule">
   <p class="eyebrow">This device</p>
   <div class="report" id="report"></div>
+  <section class="danger-zone" aria-labelledby="deleteDataTitle">
+    <div class="danger-action" id="deleteDataAction">
+      <div class="danger-copy">
+        <h2 id="deleteDataTitle">Delete all saved data</h2>
+        <p>Removes every local chat, message, random identity, and NearChat setting saved on this device.</p>
+      </div>
+      <button class="danger-btn" id="askDeleteData" type="button" aria-expanded="false" aria-controls="deleteDataConfirm">
+        <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 7h16"></path>
+          <path d="M9 7V4h6v3"></path>
+          <path d="M6.5 7l.8 13h9.4l.8-13"></path>
+          <path d="M10 11v5M14 11v5"></path>
+        </svg>
+        <span>Delete data</span>
+      </button>
+    </div>
+    <div class="danger-confirm" id="deleteDataConfirm" hidden>
+      <strong>Delete everything saved on this device?</strong>
+      <p>This cannot be undone. Synced copies on other phones will not be affected.</p>
+      <div class="confirm-actions">
+        <button class="confirm-btn" id="cancelDeleteData" type="button">Cancel</button>
+        <button class="confirm-btn delete" id="confirmDeleteData" type="button">Delete everything</button>
+      </div>
+    </div>
+    <div class="danger-result" id="deleteDataResult" role="status" aria-live="polite" hidden>
+      <strong>Saved data deleted</strong>
+      <span>NearChat will create a fresh random identity when you open it again.</span>
+    </div>
+  </section>
 </section>
 
 <!-- ============ SEND ============ -->
@@ -1072,6 +1137,82 @@ $('#btnSave').addEventListener('click', () => {
 });
 
 /* ============================================================
+   SAVED DATA
+   ============================================================ */
+function requestDatabaseDeletion(name) {
+  return new Promise(resolve => {
+    const request = indexedDB.deleteDatabase(name);
+    request.onsuccess = () => resolve(true);
+    request.onerror = () => resolve(false);
+    request.onblocked = () => resolve(false);
+  });
+}
+
+async function deleteAllSavedData() {
+  let complete = true;
+  try { localStorage.clear(); } catch { complete = false; }
+  try { sessionStorage.clear(); } catch { complete = false; }
+
+  if ('caches' in window) {
+    try {
+      const names = await caches.keys();
+      const results = await Promise.all(names.map(name => caches.delete(name)));
+      if (results.some(result => !result)) complete = false;
+    } catch {
+      complete = false;
+    }
+  }
+
+  if ('indexedDB' in window && indexedDB.databases) {
+    try {
+      const databases = await indexedDB.databases();
+      const names = databases.map(database => database.name).filter(Boolean);
+      const results = await Promise.all(names.map(requestDatabaseDeletion));
+      if (results.some(result => !result)) complete = false;
+    } catch {
+      complete = false;
+    }
+  }
+  return complete;
+}
+
+const deleteDataAction = $('#deleteDataAction');
+const deleteDataConfirm = $('#deleteDataConfirm');
+const deleteDataResult = $('#deleteDataResult');
+const askDeleteData = $('#askDeleteData');
+const cancelDeleteData = $('#cancelDeleteData');
+const confirmDeleteData = $('#confirmDeleteData');
+
+askDeleteData.addEventListener('click', () => {
+  askDeleteData.setAttribute('aria-expanded', 'true');
+  deleteDataAction.hidden = true;
+  deleteDataConfirm.hidden = false;
+  confirmDeleteData.focus();
+});
+
+cancelDeleteData.addEventListener('click', () => {
+  deleteDataConfirm.hidden = true;
+  deleteDataAction.hidden = false;
+  askDeleteData.setAttribute('aria-expanded', 'false');
+  askDeleteData.focus();
+});
+
+confirmDeleteData.addEventListener('click', async () => {
+  confirmDeleteData.disabled = true;
+  cancelDeleteData.disabled = true;
+  confirmDeleteData.textContent = 'Deleting…';
+  const complete = await deleteAllSavedData();
+  deleteDataConfirm.hidden = true;
+  deleteDataResult.hidden = false;
+  if (!complete) {
+    deleteDataResult.classList.add('err');
+    deleteDataResult.querySelector('strong').textContent = 'NearChat data deleted';
+    deleteDataResult.querySelector('span').textContent =
+      'Some additional browser storage could not be cleared. Close other NearChat tabs and try again if needed.';
+  }
+});
+
+/* ============================================================
    REPORT + ROUTING
    ============================================================ */
 async function buildReport() {
@@ -1135,7 +1276,9 @@ document.addEventListener('click', e => {
   if (go) { e.preventDefault(); location.hash = go; }
 });
 document.addEventListener('keydown', e => {
-  if (e.key === 'Escape' && location.hash !== '#/') location.hash = '#/';
+  if (e.key !== 'Escape') return;
+  if (!deleteDataConfirm.hidden) cancelDeleteData.click();
+  else if (location.hash !== '#/') location.hash = '#/';
 });
 window.addEventListener('resize', () => syncSendLayout(true));
 
