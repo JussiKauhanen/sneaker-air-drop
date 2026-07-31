@@ -143,6 +143,8 @@
   .mine .message{background:var(--outgoing)}
   .sender{font-size:11px;line-height:1.25;color:var(--green);font-weight:700;margin-bottom:2px}
   .text{font-size:15px;line-height:1.36;white-space:pre-wrap;overflow-wrap:anywhere}
+  .text a{color:#087f6d;text-decoration:underline;text-underline-offset:2px}
+  .text a:visited{color:#536f91}
   .meta{display:flex;justify-content:flex-end;margin:2px 0 0 12px;color:#7a8a92;font-size:10px}
 
   .composer{
@@ -258,8 +260,26 @@
     margin:24px 2px 8px;color:#87949a;font-size:11px;font-weight:700;
     letter-spacing:.08em;text-transform:uppercase;
   }
+  .settings-toggle{
+    width:100%;min-height:66px;border:1px solid #e2e7e5;border-radius:13px;padding:10px 14px;
+    display:flex;align-items:center;justify-content:space-between;gap:14px;color:var(--ink);
+    background:#fff;text-align:left;
+  }
+  .settings-toggle:hover{background:#f6f8f7}
+  .settings-toggle strong{display:block;font-size:14px}
+  .settings-toggle small{display:block;margin-top:4px;color:var(--muted);font-weight:400;line-height:1.35}
+  .switch{
+    position:relative;width:44px;height:26px;border-radius:13px;background:#bbc5c1;
+    flex:none;transition:background .16s;
+  }
+  .switch::after{
+    content:"";position:absolute;left:3px;top:3px;width:20px;height:20px;border-radius:50%;
+    background:#fff;box-shadow:0 1px 4px rgba(17,27,33,.25);transition:transform .16s;
+  }
+  .settings-toggle[aria-checked="true"] .switch{background:var(--green)}
+  .settings-toggle[aria-checked="true"] .switch::after{transform:translateX(18px)}
   .admin-link{
-    min-height:54px;border:1px solid #e2e7e5;border-radius:13px;padding:0 15px;
+    min-height:54px;margin-top:9px;border:1px solid #e2e7e5;border-radius:13px;padding:0 15px;
     display:flex;align-items:center;justify-content:space-between;color:var(--ink);
     text-decoration:none;font-weight:700;
   }
@@ -299,7 +319,12 @@
           <span id="headerName"></span>
         </div>
       </div>
-      <button class="icon-btn" id="settingsButton" type="button" aria-label="Settings">•••</button>
+      <div class="top-actions">
+        <button class="sync-btn" id="syncAllButton" type="button">
+          <span class="sync-icon" aria-hidden="true">↻</span><span>Sync</span>
+        </button>
+        <button class="icon-btn" id="settingsButton" type="button" aria-label="Settings">•••</button>
+      </div>
     </header>
     <section class="chat-list" aria-label="Chats">
       <div class="list-empty" id="listEmpty">
@@ -342,7 +367,7 @@
 
     <form class="composer" id="composer">
       <div class="input-wrap">
-        <input id="messageInput" maxlength="50" autocomplete="off" enterkeyhint="send"
+        <input id="messageInput" maxlength="200" autocomplete="off" enterkeyhint="send"
                aria-label="Message" placeholder="Message">
         <span class="counter" id="counter">0/50</span>
       </div>
@@ -366,6 +391,13 @@
         </div>
       </div>
       <div class="settings-label">Advanced</div>
+      <button class="settings-toggle" id="syncScopeToggle" type="button" role="switch" aria-checked="false">
+        <span>
+          <strong>Only sync the open chat</strong>
+          <small id="syncScopeDescription">Off · Sync transfers all chats</small>
+        </span>
+        <span class="switch" aria-hidden="true"></span>
+      </button>
       <a class="admin-link" href="test-harness/index.html#/">
         <span>Admin mode<small>Transfer controls and diagnostics</small></span>
         <span class="admin-arrow" aria-hidden="true">›</span>
@@ -377,21 +409,21 @@
 <div class="overlay" id="syncOverlay" hidden>
   <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="syncTitle">
     <header class="sheet-head">
-      <h2 id="syncTitle">Sync chat</h2>
+      <h2 id="syncTitle">Sync chats</h2>
       <button class="sheet-close" id="closeSync" type="button" aria-label="Close sync">×</button>
     </header>
 
     <div class="sheet-body" id="syncChoose">
-      <p class="sheet-copy">Put the phones near each other. One phone shows this chat; the other scans it.</p>
+      <p class="sheet-copy" id="syncScopeCopy">Put the phones near each other. One phone shows the chats; the other scans them.</p>
       <div class="choice-grid">
         <button class="choice" id="showCode" type="button">
           <span class="choice-icon" aria-hidden="true">▦</span>
-          <strong>Show this chat</strong>
+          <strong id="showCodeTitle">Show all chats</strong>
           <span>Display a moving sync code.</span>
         </button>
         <button class="choice" id="scanCode" type="button">
           <span class="choice-icon" aria-hidden="true">⌗</span>
-          <strong>Scan their chat</strong>
+          <strong>Scan their chats</strong>
           <span>Point this phone at their code.</span>
         </button>
       </div>
@@ -405,7 +437,7 @@
       </div>
       <div class="sync-status">
         <strong>Show this screen to the other phone</strong>
-        <span id="sendStatus">Preparing conversation…</span>
+        <span id="sendStatus">Preparing chats…</span>
       </div>
       <button class="secondary" id="backFromSend" type="button">Back</button>
     </div>
@@ -426,7 +458,7 @@
     <div class="sheet-body" id="syncDone" hidden>
       <div class="done-mark" aria-hidden="true">✓</div>
       <div class="done-copy">
-        <h3>Chat synced</h3>
+        <h3>Sync complete</h3>
         <p id="doneText"></p>
       </div>
       <button class="primary" id="syncBack" type="button">Sync back</button>
@@ -440,10 +472,12 @@
 <script type="module">
 const $ = selector => document.querySelector(selector);
 const MAX_TEXT = 50;
+const MAX_URL_TEXT = 200;
 const STORAGE_IDENTITY = 'nearchat-v2-identity';
 const STORAGE_CHATS = 'nearchat-v3-chats';
 const STORAGE_MESSAGES_LEGACY = 'nearchat-v2-messages';
-const PROTOCOL = 'NC3';
+const STORAGE_SETTINGS = 'nearchat-v4-settings';
+const PROTOCOL = 'NC4';
 const QR_VERSION = 20;
 const QR_CHUNK_BYTES = 570;
 const SYNC_FPS = 12;
@@ -490,11 +524,20 @@ function safeIdentity(value) {
   return { id: value.id.slice(0, 80), name: value.name.slice(0, 32) };
 }
 
+function hasWebUrl(text) {
+  return /https?:\/\/[^\s<>"']+/i.test(text);
+}
+
+function messageLimit(text) {
+  return hasWebUrl(text) ? MAX_URL_TEXT : MAX_TEXT;
+}
+
 function safeMessage(value) {
   if (!value || typeof value !== 'object') return null;
   if (typeof value.id !== 'string' || typeof value.sender !== 'string' ||
       typeof value.name !== 'string' || typeof value.text !== 'string') return null;
-  const text = value.text.trim().slice(0, MAX_TEXT);
+  const trimmed = value.text.trim();
+  const text = trimmed.slice(0, messageLimit(trimmed));
   if (!text) return null;
   const timestamp = Number(value.ts);
   const validTimestamp = Number.isFinite(timestamp) && timestamp >= 0 && timestamp <= 8640000000000000;
@@ -542,6 +585,11 @@ if (!identity) {
   identity = makeIdentity();
   writeJson(STORAGE_IDENTITY, identity);
 }
+
+let appSettings = readJson(STORAGE_SETTINGS, {});
+appSettings = {
+  syncOpenChatOnly: appSettings?.syncOpenChatOnly === true
+};
 
 let chats = readJson(STORAGE_CHATS, []);
 chats = Array.isArray(chats) ? chats.map(safeChat).filter(Boolean) : [];
@@ -625,6 +673,38 @@ function formatListTime(timestamp) {
   return new Intl.DateTimeFormat([], { month: 'short', day: 'numeric' }).format(date);
 }
 
+function appendLinkifiedText(element, value) {
+  const pattern = /https?:\/\/[^\s<>"']+/gi;
+  let cursor = 0;
+  for (const match of value.matchAll(pattern)) {
+    const start = match.index ?? 0;
+    if (start > cursor) element.appendChild(document.createTextNode(value.slice(cursor, start)));
+
+    let urlText = match[0];
+    let trailing = '';
+    while (urlText.length && /[),.!?;:]$/.test(urlText)) {
+      trailing = urlText.at(-1) + trailing;
+      urlText = urlText.slice(0, -1);
+    }
+
+    try {
+      const url = new URL(urlText);
+      if (url.protocol !== 'http:' && url.protocol !== 'https:') throw new Error();
+      const link = document.createElement('a');
+      link.href = url.href;
+      link.textContent = urlText;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      element.appendChild(link);
+    } catch {
+      element.appendChild(document.createTextNode(urlText));
+    }
+    if (trailing) element.appendChild(document.createTextNode(trailing));
+    cursor = start + match[0].length;
+  }
+  if (cursor < value.length) element.appendChild(document.createTextNode(value.slice(cursor)));
+}
+
 function renderChatList() {
   const list = $('#chatList');
   list.replaceChildren();
@@ -704,7 +784,7 @@ function renderMessages() {
 
     const text = document.createElement('div');
     text.className = 'text';
-    text.textContent = item.text;
+    appendLinkifiedText(text, item.text);
     const meta = document.createElement('div');
     meta.className = 'meta';
     meta.textContent = formatTime(item.ts);
@@ -753,19 +833,26 @@ function createChat() {
 
 function updateComposer() {
   const length = $('#messageInput').value.length;
+  const limit = messageLimit($('#messageInput').value);
   const counter = $('#counter');
-  counter.textContent = `${length}/${MAX_TEXT}`;
-  counter.classList.toggle('near', length >= 40 && length < MAX_TEXT);
-  counter.classList.toggle('full', length >= MAX_TEXT);
-  $('#sendButton').disabled = !$('#messageInput').value.trim();
+  counter.textContent = `${length}/${limit}`;
+  counter.classList.toggle('near', length >= limit - 10 && length < limit);
+  counter.classList.toggle('full', length >= limit);
+  $('#messageInput').setAttribute('aria-invalid', String(length > limit));
+  $('#sendButton').disabled = !$('#messageInput').value.trim() || length > limit;
 }
 
 $('#composer').addEventListener('submit', event => {
   event.preventDefault();
   const chat = activeChat();
   if (!chat) return;
-  const text = $('#messageInput').value.trim().slice(0, MAX_TEXT);
+  const text = $('#messageInput').value.trim();
   if (!text) return;
+  const limit = messageLimit(text);
+  if (text.length > limit) {
+    showToast(`Message is over the ${limit}-character limit.`);
+    return;
+  }
   ensureLocalParticipant(chat);
   chat.messages.push({
     id: `${identity.id}:${Date.now().toString(36)}:${Math.random().toString(36).slice(2, 7)}`,
@@ -783,6 +870,18 @@ $('#composer').addEventListener('submit', event => {
   $('#messageInput').focus();
 });
 $('#messageInput').addEventListener('input', updateComposer);
+$('#messageInput').addEventListener('paste', event => {
+  const pasted = event.clipboardData?.getData('text');
+  if (typeof pasted !== 'string') return;
+  const input = $('#messageInput');
+  const start = input.selectionStart ?? input.value.length;
+  const end = input.selectionEnd ?? start;
+  const candidate = `${input.value.slice(0, start)}${pasted}${input.value.slice(end)}`;
+  const limit = messageLimit(candidate);
+  if (candidate.trim().length <= limit) return;
+  event.preventDefault();
+  showToast(`Pasted text is over the ${limit}-character limit.`);
+});
 $('#newChatButton').addEventListener('click', createChat);
 $('#backToChats').addEventListener('click', showChatList);
 $('#chatList').addEventListener('click', event => {
@@ -809,10 +908,24 @@ function closeOverlay(element) {
   document.body.style.overflow = '';
 }
 
+function renderSyncSetting() {
+  const enabled = appSettings.syncOpenChatOnly;
+  $('#syncScopeToggle').setAttribute('aria-checked', String(enabled));
+  $('#syncScopeDescription').textContent = enabled
+    ? 'On · Sync transfers only the open chat'
+    : 'Off · Sync transfers all chats';
+}
+
 $('#settingsButton').addEventListener('click', () => openOverlay($('#settingsOverlay')));
 $('#closeSettings').addEventListener('click', () => closeOverlay($('#settingsOverlay')));
 $('#settingsOverlay').addEventListener('click', event => {
   if (event.target === $('#settingsOverlay')) closeOverlay($('#settingsOverlay'));
+});
+$('#syncScopeToggle').addEventListener('click', () => {
+  appSettings.syncOpenChatOnly = !appSettings.syncOpenChatOnly;
+  writeJson(STORAGE_SETTINGS, appSettings);
+  renderSyncSetting();
+  showToast(appSettings.syncOpenChatOnly ? 'Syncing the open chat only' : 'Syncing all chats');
 });
 
 /* ---------- sync payload ---------- */
@@ -835,22 +948,61 @@ function makeSession() {
   return [...bytes].map(byte => (byte % 36).toString(36)).join('');
 }
 
-function buildSyncFrames() {
-  const chat = activeChat();
-  if (!chat) throw new Error('Open a chat before syncing.');
-  ensureLocalParticipant(chat);
-  const payload = new TextEncoder().encode(JSON.stringify({
-    version: 3,
-    chat
-  }));
+async function gzipBytes(bytes, mode) {
+  const Stream = mode === 'compress' ? window.CompressionStream : window.DecompressionStream;
+  if (!Stream) throw new Error('Compression is not supported on this phone.');
+  const stream = new Blob([bytes]).stream().pipeThrough(new Stream('gzip'));
+  return new Uint8Array(await new Response(stream).arrayBuffer());
+}
+
+async function encodeTransferPayload(value) {
+  const raw = new TextEncoder().encode(JSON.stringify(value));
+  let body = raw;
+  let compressed = false;
+  try {
+    const zipped = await gzipBytes(raw, 'compress');
+    if (zipped.length < raw.length) {
+      body = zipped;
+      compressed = true;
+    }
+  } catch {}
+
+  const payload = new Uint8Array(body.length + 1);
+  payload[0] = compressed ? 1 : 0;
+  payload.set(body, 1);
+  return { payload, compressed, originalBytes: raw.length };
+}
+
+async function buildSyncFrames() {
+  const openChat = activeChat();
+  if (appSettings.syncOpenChatOnly && !openChat)
+    throw new Error('Open a chat before sending with this setting.');
+
+  const selectedChats = appSettings.syncOpenChatOnly ? [openChat] : chats;
+  for (const chat of selectedChats) ensureLocalParticipant(chat);
+  saveChats();
+
+  const encoded = await encodeTransferPayload({
+    version: 4,
+    activeChatId,
+    chats: selectedChats
+  });
+  const payload = encoded.payload;
   const chunks = [];
   for (let start = 0; start < payload.length; start += QR_CHUNK_BYTES)
     chunks.push(payload.subarray(start, Math.min(start + QR_CHUNK_BYTES, payload.length)));
   if (!chunks.length) chunks.push(new Uint8Array());
   const session = makeSession();
-  return chunks.map((chunk, index) =>
-    `${PROTOCOL}|${session}|${index.toString(36)}|${chunks.length.toString(36)}|${toB64(chunk)}`
-  );
+  const frames = chunks.map((chunk, index) =>
+    `${PROTOCOL}|${session}|${index.toString(36)}|${chunks.length.toString(36)}|${toB64(chunk)}`);
+  return {
+    frames,
+    compressed: encoded.compressed,
+    originalBytes: encoded.originalBytes,
+    transferBytes: payload.length,
+    chatCount: selectedChats.length,
+    messageCount: selectedChats.reduce((sum, chat) => sum + chat.messages.length, 0)
+  };
 }
 
 let qrLib = null;
@@ -934,20 +1086,21 @@ async function startSender() {
   $('#syncQr').hidden = true;
   $('#qrLoading').hidden = false;
   $('#qrLoading').textContent = 'Preparing sync code…';
-  $('#sendStatus').textContent = 'Preparing conversation…';
+  $('#sendStatus').textContent = 'Preparing chats…';
 
   try {
     await loadQrLibrary();
-    const rawFrames = buildSyncFrames();
-    senderFrames = rawFrames.map(rasterizeQr);
+    const bundle = await buildSyncFrames();
+    senderFrames = bundle.frames.map(rasterizeQr);
     senderIndex = 0;
     senderLastFrame = 0;
     $('#qrLoading').hidden = true;
     $('#syncQr').hidden = false;
-    const chat = activeChat();
-    const messageCount = chat?.messages.length ?? 0;
+    const chatLabel = `${bundle.chatCount} chat${bundle.chatCount === 1 ? '' : 's'}`;
+    const messageLabel = `${bundle.messageCount} message${bundle.messageCount === 1 ? '' : 's'}`;
+    const frameLabel = `${senderFrames.length} frame${senderFrames.length === 1 ? '' : 's'}`;
     $('#sendStatus').textContent =
-      `${messageCount} message${messageCount === 1 ? '' : 's'} · ${senderFrames.length} code frame${senderFrames.length === 1 ? '' : 's'}`;
+      `${chatLabel} · ${messageLabel} · ${frameLabel}${bundle.compressed ? ' · compressed' : ''}`;
     requestWakeLock();
     senderRaf = requestAnimationFrame(senderLoop);
   } catch (error) {
@@ -969,8 +1122,10 @@ let scannerGeneration = 0;
 let scannerBusy = false;
 let scannerLastDecode = 0;
 let receiveSession = null;
+let receiveProtocol = 0;
 let receiveTotal = 0;
 let receiveChunks = new Map();
+let receiveFinishing = false;
 
 async function chooseDecoder() {
   if ('BarcodeDetector' in window) {
@@ -1022,14 +1177,14 @@ function updateScanProgress() {
   const total = receiveTotal;
   $('#scanCount').textContent = `${count} / ${total || 0}`;
   $('#scanProgress').style.width = total ? `${100 * count / total}%` : '0%';
-  $('#scanStatus').textContent = total ? 'Receiving conversation…' : 'Looking for sync code…';
+  $('#scanStatus').textContent = total ? 'Receiving chats…' : 'Looking for sync code…';
 }
 
-const FRAME_RE = /^NC([23])\|([a-z0-9]{6})\|([a-z0-9]+)\|([a-z0-9]+)\|([A-Za-z0-9+/=]*)$/;
+const FRAME_RE = /^NC([234])\|([a-z0-9]{6})\|([a-z0-9]+)\|([a-z0-9]+)\|([A-Za-z0-9+/=]*)$/;
 
 function ingestFrame(raw) {
   const match = FRAME_RE.exec(raw);
-  if (!match) return;
+  if (!match || receiveFinishing) return;
   const session = `${match[1]}:${match[2]}`;
   const index = parseInt(match[3], 36);
   const total = parseInt(match[4], 36);
@@ -1038,18 +1193,28 @@ function ingestFrame(raw) {
 
   if (session !== receiveSession) {
     receiveSession = session;
+    receiveProtocol = Number(match[1]);
     receiveTotal = total;
     receiveChunks = new Map();
+    receiveFinishing = false;
   }
   if (total !== receiveTotal || receiveChunks.has(index)) return;
   try { receiveChunks.set(index, fromB64(match[5])); }
   catch { return; }
   updateScanProgress();
-  if (receiveChunks.size === receiveTotal) finishReceive();
+  if (receiveChunks.size === receiveTotal && !receiveFinishing) {
+    receiveFinishing = true;
+    finishReceive();
+  }
 }
 
-function incomingChat(payload) {
-  if (payload?.version === 3) return safeChat(payload.chat);
+function incomingChats(payload) {
+  if (payload?.version === 4 && Array.isArray(payload.chats))
+    return payload.chats.map(safeChat).filter(Boolean);
+  if (payload?.version === 3) {
+    const chat = safeChat(payload.chat);
+    return chat ? [chat] : [];
+  }
   if (payload?.version === 2 && Array.isArray(payload.messages)) {
     const owner = safeIdentity(payload.owner);
     const messages = payload.messages.map(safeMessage).filter(Boolean);
@@ -1057,60 +1222,80 @@ function incomingChat(payload) {
     const firstSender = messages[0] ? { id: messages[0].sender, name: messages[0].name } : null;
     if (firstSender && !participants.some(participant => participant.id === firstSender.id))
       participants.push(firstSender);
-    return safeChat({
+    const chat = safeChat({
       id: `legacy-${owner?.id ?? firstSender?.id ?? randomId()}`,
       createdAt: messages[0]?.ts ?? Date.now(),
       updatedAt: messages.at(-1)?.ts ?? Date.now(),
       participants,
       messages
     });
+    return chat ? [chat] : [];
   }
-  return null;
+  return [];
 }
 
-function mergeConversation(payload) {
-  const incoming = incomingChat(payload);
-  if (!incoming) throw new Error('This is not a NearChat conversation.');
-  ensureLocalParticipant(incoming);
+function mergeConversations(payload) {
+  const incomingList = incomingChats(payload);
+  if (!incomingList.length && payload?.version !== 4)
+    throw new Error('This is not a NearChat conversation.');
+  for (const incoming of incomingList) ensureLocalParticipant(incoming);
 
   const draft = activeChat();
-  if (draft && draft.id !== incoming.id && draft.messages.length === 0 &&
+  if (draft && !incomingList.some(incoming => incoming.id === draft.id) && draft.messages.length === 0 &&
       draft.participants.every(participant => participant.id === identity.id)) {
     chats = chats.filter(chat => chat.id !== draft.id);
+    activeChatId = null;
   }
 
-  let chat = chats.find(item => item.id === incoming.id);
-  const isNew = !chat;
-  let added = 0;
-  if (!chat) {
-    chat = incoming;
-    chats.push(chat);
-    added = chat.messages.length;
+  let messagesAdded = 0;
+  let chatsAdded = 0;
+  for (const incoming of incomingList) {
+    let chat = chats.find(item => item.id === incoming.id);
+    if (!chat) {
+      chat = incoming;
+      chats.push(chat);
+      chatsAdded++;
+      messagesAdded += chat.messages.length;
+    }
+
+    const participantMap = new Map(chat.participants.map(participant => [participant.id, participant]));
+    for (const participant of incoming.participants) participantMap.set(participant.id, participant);
+    participantMap.set(identity.id, identity);
+    chat.participants = [...participantMap.values()];
+
+    const known = new Set(chat.messages.map(message => message.id));
+    for (const message of incoming.messages) {
+      if (known.has(message.id)) continue;
+      known.add(message.id);
+      chat.messages.push(message);
+      messagesAdded++;
+    }
+    chat.messages.sort((a, b) => a.ts - b.ts || a.id.localeCompare(b.id));
+    chat.updatedAt = Math.max(chat.updatedAt, incoming.updatedAt, chat.messages.at(-1)?.ts ?? 0);
   }
 
-  const participantMap = new Map(chat.participants.map(participant => [participant.id, participant]));
-  for (const participant of incoming.participants) participantMap.set(participant.id, participant);
-  participantMap.set(identity.id, identity);
-  chat.participants = [...participantMap.values()];
-
-  const known = new Set(chat.messages.map(message => message.id));
-  for (const message of incoming.messages) {
-    if (known.has(message.id)) continue;
-    known.add(message.id);
-    chat.messages.push(message);
-    added++;
+  const requestedChatId = typeof payload?.activeChatId === 'string'
+    ? payload.activeChatId.slice(0, 100)
+    : null;
+  if (!activeChat()) {
+    activeChatId = chats.some(chat => chat.id === requestedChatId)
+      ? requestedChatId
+      : incomingList[0]?.id ?? null;
   }
-  chat.messages.sort((a, b) => a.ts - b.ts || a.id.localeCompare(b.id));
-  chat.updatedAt = Math.max(chat.updatedAt, incoming.updatedAt, chat.messages.at(-1)?.ts ?? 0);
-  activeChatId = chat.id;
   saveChats();
   renderChatList();
-  updateConversationHeader();
-  renderMessages();
-  return { added, chat, isNew };
+  if (activeChat()) {
+    updateConversationHeader();
+    renderMessages();
+  }
+  return {
+    messagesAdded,
+    chatsAdded,
+    chatsReceived: incomingList.length
+  };
 }
 
-function finishReceive() {
+async function finishReceive() {
   try {
     const length = [...receiveChunks.values()].reduce((sum, bytes) => sum + bytes.length, 0);
     const combined = new Uint8Array(length);
@@ -1121,20 +1306,34 @@ function finishReceive() {
       combined.set(chunk, offset);
       offset += chunk.length;
     }
-    const payload = JSON.parse(new TextDecoder().decode(combined));
-    const result = mergeConversation(payload);
+    let payloadBytes = combined;
+    if (receiveProtocol === 4) {
+      if (!combined.length || (combined[0] !== 0 && combined[0] !== 1))
+        throw new Error('This sync code is damaged.');
+      payloadBytes = combined.subarray(1);
+      if (combined[0] === 1) payloadBytes = await gzipBytes(payloadBytes, 'decompress');
+    }
+    const payload = JSON.parse(new TextDecoder().decode(payloadBytes));
+    const result = mergeConversations(payload);
     stopScanner();
-    $('#doneText').textContent = result.added
-      ? `${result.added} new message${result.added === 1 ? '' : 's'} added to ${chatTitle(result.chat)}. Send it back to finish a two-way sync.`
-      : result.isNew
-        ? `${chatTitle(result.chat)} was added. Send it back to finish a two-way sync.`
-      : `${chatTitle(result.chat)} is already up to date. You can still sync back to confirm.`;
+    const additions = [];
+    if (result.chatsAdded)
+      additions.push(`${result.chatsAdded} new chat${result.chatsAdded === 1 ? '' : 's'}`);
+    if (result.messagesAdded)
+      additions.push(`${result.messagesAdded} new message${result.messagesAdded === 1 ? '' : 's'}`);
+    $('#doneText').textContent = additions.length
+      ? `${additions.join(' and ')} received. Send back to finish a two-way sync.`
+      : result.chatsReceived === 1
+        ? 'The transferred chat is already up to date. You can still sync back to confirm.'
+        : 'The transferred chats are already up to date. You can still sync back to confirm.';
     setSyncView('done');
-    showToast(result.added ? `${result.added} new message${result.added === 1 ? '' : 's'}` : 'Already in sync');
+    showToast(additions.length ? additions.join(' · ') : 'Already in sync');
   } catch (error) {
     receiveSession = null;
+    receiveProtocol = 0;
     receiveTotal = 0;
     receiveChunks = new Map();
+    receiveFinishing = false;
     updateScanProgress();
     $('#scanStatus').textContent = error.message;
   }
@@ -1169,8 +1368,10 @@ async function startScanner() {
   setSyncView('scan');
   stopSyncActivity();
   receiveSession = null;
+  receiveProtocol = 0;
   receiveTotal = 0;
   receiveChunks = new Map();
+  receiveFinishing = false;
   updateScanProgress();
   $('#scanStatus').textContent = 'Starting camera…';
 
@@ -1224,8 +1425,20 @@ function setSyncView(name) {
   for (const [key, element] of Object.entries(syncViews)) element.hidden = key !== name;
 }
 
+function updateSyncScopeUi() {
+  const openOnly = appSettings.syncOpenChatOnly;
+  const hasOpenChat = Boolean(activeChat());
+  $('#showCodeTitle').textContent = openOnly ? 'Show this chat' : 'Show all chats';
+  $('#showCode').disabled = openOnly && !hasOpenChat;
+  $('#syncScopeCopy').textContent = openOnly
+    ? hasOpenChat
+      ? 'Put the phones near each other. This sync will send only the open chat.'
+      : 'Open a chat to send only it. You can still scan chats from the other phone.'
+    : 'Put the phones near each other. One phone shows all chats; the other scans them.';
+}
+
 function openSync() {
-  if (!activeChat()) return;
+  updateSyncScopeUi();
   setSyncView('choose');
   openOverlay($('#syncOverlay'));
 }
@@ -1234,9 +1447,12 @@ function closeSync() {
   stopSyncActivity();
   closeOverlay($('#syncOverlay'));
   setSyncView('choose');
+  if (!$('#conversationScreen').hidden) return;
+  activeChatId = null;
 }
 
 $('#syncButton').addEventListener('click', openSync);
+$('#syncAllButton').addEventListener('click', openSync);
 $('#closeSync').addEventListener('click', closeSync);
 $('#syncOverlay').addEventListener('click', event => {
   if (event.target === $('#syncOverlay')) closeSync();
@@ -1273,6 +1489,7 @@ document.addEventListener('visibilitychange', () => {
 });
 
 setIdentityUi();
+renderSyncSetting();
 renderChatList();
 updateComposer();
 </script>
