@@ -228,18 +228,28 @@
   .sync-hint{margin:18px 2px 0;color:#7a898f;font-size:12px;line-height:1.5}
   .sync-hint b{color:#435159}
 
-  .duplex-stage{background:#111;border-radius:16px;overflow:hidden}
-  .duplex-camera{position:relative;height:92px;background:#111;overflow:hidden}
-  .duplex-camera::after{
-    content:"Front camera · align the other screen";position:absolute;left:10px;bottom:8px;
-    padding:5px 8px;border-radius:10px;background:rgba(0,0,0,.56);color:#fff;
-    font-size:10px;letter-spacing:.02em;pointer-events:none;
+  .duplex-stage{
+    position:relative;height:min(48vh,380px);min-height:300px;background:#111;
+    border-radius:16px;overflow:hidden;
   }
+  .duplex-camera{position:absolute;inset:0;background:#111;overflow:hidden}
   .duplex-qr-shell{
-    min-height:230px;background:#f7f8f8;display:grid;place-items:center;
-    padding:12px;overflow:hidden;
+    position:absolute;right:12px;bottom:12px;width:min(62vw,240px);aspect-ratio:1;
+    background:#fff;border-radius:13px;display:grid;place-items:center;padding:8px;
+    overflow:hidden;box-shadow:0 7px 24px rgba(0,0,0,.32);
   }
   #syncQr{display:block;image-rendering:pixelated;max-width:100%;height:auto}
+  .alignment-note{
+    position:absolute;left:10px;top:10px;z-index:2;display:flex;align-items:center;gap:7px;
+    max-width:calc(100% - 20px);padding:7px 10px;border-radius:14px;
+    background:rgba(0,0,0,.62);color:#fff;font-size:11px;line-height:1.25;
+    box-shadow:0 2px 10px rgba(0,0,0,.2);pointer-events:none;
+  }
+  .alignment-dot{width:8px;height:8px;border-radius:50%;background:#aeb7b3;flex:none}
+  .duplex-stage.frame-locked .alignment-note{background:rgba(5,76,68,.9)}
+  .duplex-stage.frame-locked .alignment-dot{
+    background:var(--accent);box-shadow:0 0 0 4px rgba(37,211,102,.2);
+  }
   .sync-status{text-align:center;margin:16px 0 0}
   .sync-status strong{display:block;font-size:16px}
   .sync-status span{display:block;margin-top:5px;color:var(--muted);font-size:12px}
@@ -340,7 +350,7 @@
   @media(max-width:360px){
     .sync-btn{padding:0 11px}.sync-btn span:last-child{display:none}
     .choice-grid{grid-template-columns:1fr}
-    .duplex-camera{height:76px}
+    .duplex-stage{height:min(47vh,320px);min-height:280px}
     .composer{padding-left:6px;padding-right:6px}
     .composer-row{gap:5px}
     .composer-tool{width:38px;height:42px}
@@ -491,14 +501,18 @@
           <span>Start the front camera and moving code together.</span>
         </button>
       </div>
-      <p class="sync-hint"><b>On both phones:</b> tap the button, turn up screen brightness, then hold the screens 20–30 cm apart.</p>
+      <p class="sync-hint"><b>On both phones:</b> tap, turn up brightness, then align the top edges 20–30 cm apart. Rapid ticks mean the cameras can see each other.</p>
     </div>
 
     <div class="sheet-body" id="syncDuplex" hidden>
-      <div class="duplex-stage">
+      <div class="duplex-stage" id="duplexStage">
         <div class="duplex-camera">
           <video id="syncVideo" playsinline muted autoplay aria-label="Front camera preview"></video>
           <canvas id="scanCanvas"></canvas>
+        </div>
+        <div class="alignment-note" role="status">
+          <span class="alignment-dot" aria-hidden="true"></span>
+          <span id="alignmentText">Adjust until you hear rapid ticks</span>
         </div>
         <div class="duplex-qr-shell">
           <canvas id="syncQr" hidden aria-label="Outgoing moving sync code"></canvas>
@@ -1263,7 +1277,7 @@ const qrScratchContext = qrScratch.getContext('2d');
 function paintQr(frame) {
   if (qrScratch.width !== frame.dim) qrScratch.width = qrScratch.height = frame.dim;
   qrScratchContext.putImageData(frame.image, 0, 0);
-  const cssTarget = Math.max(190, Math.min(310, window.innerWidth - 70, window.innerHeight - 430));
+  const cssTarget = Math.max(175, Math.min(230, window.innerWidth * 0.6, window.innerHeight * 0.34));
   const dpr = window.devicePixelRatio || 1;
   const scale = Math.max(2, Math.floor(cssTarget * dpr / frame.dim));
   const pixels = frame.dim * scale;
@@ -1286,6 +1300,8 @@ let receivedResult = null;
 let completionTimer = 0;
 let completionAudioContext = null;
 let syncSetupGeneration = 0;
+let lastAlignmentTone = 0;
+let alignmentLostTimer = 0;
 
 async function requestWakeLock() {
   try { wakeLock = await navigator.wakeLock?.request('screen'); } catch {}
@@ -1305,7 +1321,7 @@ function armCompletionBeep() {
   } catch {}
 }
 
-function playCompletionBeep() {
+function playFeedbackTone(frequency, duration, volume) {
   const context = completionAudioContext;
   if (!context) return;
   const sound = () => {
@@ -1314,17 +1330,40 @@ function playCompletionBeep() {
       const oscillator = context.createOscillator();
       const gain = context.createGain();
       oscillator.type = 'sine';
-      oscillator.frequency.setValueAtTime(880, now);
+      oscillator.frequency.setValueAtTime(frequency, now);
       gain.gain.setValueAtTime(0.0001, now);
-      gain.gain.exponentialRampToValueAtTime(0.16, now + 0.015);
-      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.2);
+      gain.gain.exponentialRampToValueAtTime(volume, now + 0.008);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
       oscillator.connect(gain).connect(context.destination);
       oscillator.start(now);
-      oscillator.stop(now + 0.21);
+      oscillator.stop(now + duration + 0.01);
     } catch {}
   };
   if (context.state === 'suspended') context.resume().then(sound).catch(() => {});
   else sound();
+}
+
+function playCompletionBeep() {
+  playFeedbackTone(880, 0.2, 0.16);
+}
+
+function markFrameLock() {
+  const now = performance.now();
+  if (now - lastAlignmentTone < 280) return;
+  lastAlignmentTone = now;
+  $('#duplexStage').classList.add('frame-locked');
+  $('#alignmentText').textContent = 'Frame lock · keep the phones still';
+  clearTimeout(alignmentLostTimer);
+  alignmentLostTimer = setTimeout(clearFrameLock, 720);
+  playFeedbackTone(620, 0.045, 0.045);
+  try { navigator.vibrate?.(12); } catch {}
+}
+
+function clearFrameLock() {
+  clearTimeout(alignmentLostTimer);
+  alignmentLostTimer = 0;
+  $('#duplexStage').classList.remove('frame-locked');
+  $('#alignmentText').textContent = 'Adjust until you hear rapid ticks';
 }
 
 function senderLoop(timestamp) {
@@ -1379,7 +1418,7 @@ async function startFaceToFace() {
     const frameLabel = `${senderFrames.length} frame${senderFrames.length === 1 ? '' : 's'}`;
     $('#sendStatus').textContent =
       `${chatLabel} · ${messageLabel} · ${frameLabel}${bundle.compressed ? ' · compressed' : ''}`;
-    $('#duplexTitle').textContent = 'Keep both screens facing each other';
+    $('#duplexTitle').textContent = 'Align the top edges and listen';
     $('#scanStatus').textContent = 'Looking for the other phone…';
     paintQr(senderFrames[0]);
     senderIndex = senderFrames.length > 1 ? 1 : 0;
@@ -1499,6 +1538,7 @@ const ACK_RE = /^NCA\|([2345]:[a-z0-9]{6})$/;
 function ingestFrame(raw) {
   const acknowledgement = ACK_RE.exec(raw);
   if (acknowledgement) {
+    markFrameLock();
     if (acknowledgement[1] === outboundSession && !peerConfirmedReceipt) {
       peerConfirmedReceipt = true;
       updateScanProgress();
@@ -1513,6 +1553,7 @@ function ingestFrame(raw) {
   const total = parseInt(match[4], 36);
   if (!Number.isInteger(index) || !Number.isInteger(total) ||
       total < 1 || index < 0 || index >= total || total > 10000) return;
+  markFrameLock();
 
   if (session !== receiveSession) {
     receiveSession = session;
@@ -1719,6 +1760,8 @@ function resetDuplexState() {
   peerConfirmedReceipt = false;
   receivedResult = null;
   senderAckFrame = null;
+  lastAlignmentTone = 0;
+  clearFrameLock();
   receiveSession = null;
   receiveProtocol = 0;
   receiveTotal = 0;
@@ -1734,6 +1777,7 @@ function stopScanner() {
   cameraStream = null;
   syncVideo.srcObject = null;
   scannerBusy = false;
+  clearFrameLock();
   releaseWakeLock();
 }
 
