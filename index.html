@@ -209,7 +209,6 @@
   .sheet-body{padding:22px 20px 24px}
   .sheet-copy{color:var(--muted);font-size:14px;line-height:1.55;margin:0 0 20px}
   .choice-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-  .choice-grid.face-choice{grid-template-columns:1fr}
   .choice{
     min-height:126px;border-radius:14px;padding:18px;text-align:left;background:#f3f7f5;
     border:1px solid #e0e8e4;color:var(--ink);
@@ -221,40 +220,32 @@
   }
   .choice strong{display:block;font-size:15px}
   .choice span{display:block;margin-top:5px;color:var(--muted);font-size:12px;line-height:1.4}
-  .face-choice .choice{min-height:104px;display:grid;grid-template-columns:42px 1fr;column-gap:14px;align-items:center}
-  .face-choice .choice-icon{grid-row:1/3;margin:0}
-  .face-choice .choice strong{align-self:end}
-  .face-choice .choice span:last-child{align-self:start}
   .sync-hint{margin:18px 2px 0;color:#7a898f;font-size:12px;line-height:1.5}
   .sync-hint b{color:#435159}
 
-  .duplex-stage{
-    position:relative;height:min(48vh,380px);min-height:300px;background:#111;
-    border-radius:16px;overflow:hidden;
-  }
-  .duplex-camera{position:absolute;inset:0;background:#111;overflow:hidden}
-  .duplex-qr-shell{
-    position:absolute;right:12px;bottom:12px;width:min(62vw,240px);aspect-ratio:1;
-    background:#fff;border-radius:13px;display:grid;place-items:center;padding:8px;
-    overflow:hidden;box-shadow:0 7px 24px rgba(0,0,0,.32);
+  .qr-shell{
+    min-height:310px;background:#f7f8f8;border-radius:16px;display:grid;place-items:center;
+    padding:18px;overflow:hidden;
   }
   #syncQr{display:block;image-rendering:pixelated;max-width:100%;height:auto}
-  .alignment-note{
-    position:absolute;left:10px;top:10px;z-index:2;display:flex;align-items:center;gap:7px;
-    max-width:calc(100% - 20px);padding:7px 10px;border-radius:14px;
-    background:rgba(0,0,0,.62);color:#fff;font-size:11px;line-height:1.25;
-    box-shadow:0 2px 10px rgba(0,0,0,.2);pointer-events:none;
-  }
-  .alignment-dot{width:8px;height:8px;border-radius:50%;background:#aeb7b3;flex:none}
-  .duplex-stage.frame-locked .alignment-note{background:rgba(5,76,68,.9)}
-  .duplex-stage.frame-locked .alignment-dot{
-    background:var(--accent);box-shadow:0 0 0 4px rgba(37,211,102,.2);
-  }
   .sync-status{text-align:center;margin:16px 0 0}
   .sync-status strong{display:block;font-size:16px}
   .sync-status span{display:block;margin-top:5px;color:var(--muted);font-size:12px}
-  #syncVideo{width:100%;height:100%;display:block;object-fit:cover;transform:scaleX(-1)}
+  .scanner{
+    position:relative;height:min(48vh,380px);min-height:240px;background:#111;
+    border-radius:16px;overflow:hidden;
+  }
+  #syncVideo{width:100%;height:100%;display:block;object-fit:cover}
   #scanCanvas{display:none}
+  .scan-frame{
+    position:absolute;left:50%;top:50%;width:min(68vw,270px);aspect-ratio:1;
+    transform:translate(-50%,-50%);border:2px solid rgba(255,255,255,.92);
+    border-radius:18px;box-shadow:0 0 0 999px rgba(0,0,0,.22);pointer-events:none;
+  }
+  .scan-frame::before,.scan-frame::after{
+    content:"";position:absolute;left:14%;right:14%;height:1px;background:rgba(37,211,102,.8);
+  }
+  .scan-frame::before{top:33%}.scan-frame::after{bottom:33%}
   .progress{margin-top:16px}
   .progress-line{height:6px;border-radius:3px;background:#e7ece9;overflow:hidden}
   .progress-fill{height:100%;width:0;background:var(--accent);transition:width .14s linear}
@@ -350,7 +341,6 @@
   @media(max-width:360px){
     .sync-btn{padding:0 11px}.sync-btn span:last-child{display:none}
     .choice-grid{grid-template-columns:1fr}
-    .duplex-stage{height:min(47vh,320px);min-height:280px}
     .composer{padding-left:6px;padding-right:6px}
     .composer-row{gap:5px}
     .composer-tool{width:38px;height:42px}
@@ -370,7 +360,7 @@
         </div>
       </div>
       <div class="top-actions">
-        <button class="sync-btn" id="syncAllButton" type="button" aria-label="Sync chats">
+        <button class="sync-btn" id="syncAllButton" type="button">
           <span class="sync-icon" aria-hidden="true">↻</span><span>Sync</span>
         </button>
         <button class="icon-btn" id="settingsButton" type="button" aria-label="Settings">•••</button>
@@ -399,7 +389,7 @@
           <span id="chatSubtitle">Local conversation</span>
         </div>
       </div>
-      <button class="sync-btn" id="syncButton" type="button" aria-label="Sync chats">
+      <button class="sync-btn" id="syncButton" type="button">
         <span class="sync-icon" aria-hidden="true">↻</span><span>Sync</span>
       </button>
     </header>
@@ -493,41 +483,46 @@
     </header>
 
     <div class="sheet-body" id="syncChoose">
-      <p class="sheet-copy" id="syncScopeCopy">Both phones show and scan chats at the same time using their front cameras.</p>
-      <div class="choice-grid face-choice">
-        <button class="choice" id="startFaceSync" type="button">
-          <span class="choice-icon" aria-hidden="true">↔</span>
-          <strong id="faceSyncTitle">Sync all chats face to face</strong>
-          <span>Start the front camera and moving code together.</span>
+      <p class="sheet-copy" id="syncScopeCopy">Put the phones near each other. One phone shows the chats; the other scans them.</p>
+      <div class="choice-grid">
+        <button class="choice" id="showCode" type="button">
+          <span class="choice-icon" aria-hidden="true">▦</span>
+          <strong id="showCodeTitle">Show all chats</strong>
+          <span>Display a moving sync code.</span>
+        </button>
+        <button class="choice" id="scanCode" type="button">
+          <span class="choice-icon" aria-hidden="true">⌗</span>
+          <strong>Scan their chats</strong>
+          <span>Point this phone at their code.</span>
         </button>
       </div>
-      <p class="sync-hint"><b>On both phones:</b> tap, turn up brightness, then align the top edges 20–30 cm apart. Rapid ticks mean the cameras can see each other.</p>
+      <p class="sync-hint"><b>For a full two-way sync:</b> scan once, then tap “Sync back” on the receiving phone.</p>
+      <p class="sync-hint"><b>While scanning:</b> silence means adjust the phones; continuous quiet ticks mean hold still.</p>
     </div>
 
-    <div class="sheet-body" id="syncDuplex" hidden>
-      <div class="duplex-stage" id="duplexStage">
-        <div class="duplex-camera">
-          <video id="syncVideo" playsinline muted autoplay aria-label="Front camera preview"></video>
-          <canvas id="scanCanvas"></canvas>
-        </div>
-        <div class="alignment-note" role="status">
-          <span class="alignment-dot" aria-hidden="true"></span>
-          <span id="alignmentText">Adjust until you hear rapid ticks</span>
-        </div>
-        <div class="duplex-qr-shell">
-          <canvas id="syncQr" hidden aria-label="Outgoing moving sync code"></canvas>
-          <span id="qrLoading">Preparing moving code…</span>
-        </div>
+    <div class="sheet-body" id="syncSend" hidden>
+      <div class="qr-shell">
+        <canvas id="syncQr" hidden></canvas>
+        <span id="qrLoading">Preparing sync code…</span>
       </div>
       <div class="sync-status">
-        <strong id="duplexTitle">Starting face-to-face sync…</strong>
-        <span id="sendStatus">Preparing your chats and front camera…</span>
+        <strong>Show this screen to the other phone</strong>
+        <span id="sendStatus">Preparing chats…</span>
+      </div>
+      <button class="secondary" id="backFromSend" type="button">Back</button>
+    </div>
+
+    <div class="sheet-body" id="syncScan" hidden>
+      <div class="scanner">
+        <video id="syncVideo" playsinline muted autoplay></video>
+        <canvas id="scanCanvas"></canvas>
+        <div class="scan-frame" aria-hidden="true"></div>
       </div>
       <div class="progress">
         <div class="progress-line"><div class="progress-fill" id="scanProgress"></div></div>
-        <div class="progress-text"><span id="scanStatus">Starting front camera…</span><span id="scanCount">0 / 0</span></div>
+        <div class="progress-text"><span id="scanStatus">Starting camera…</span><span id="scanCount">0 / 0</span></div>
       </div>
-      <button class="secondary" id="backFromDuplex" type="button">Cancel</button>
+      <button class="secondary" id="backFromScan" type="button">Back</button>
     </div>
 
     <div class="sheet-body" id="syncDone" hidden>
@@ -536,7 +531,8 @@
         <h3>Sync complete</h3>
         <p id="doneText"></p>
       </div>
-      <button class="primary" id="finishSync" type="button">Done</button>
+      <button class="primary" id="syncBack" type="button">Sync back</button>
+      <button class="secondary" id="finishSync" type="button">Done</button>
     </div>
   </section>
 </div>
@@ -1227,7 +1223,6 @@ async function buildSyncFrames() {
     `${PROTOCOL}|${session}|${index.toString(36)}|${chunks.length.toString(36)}|${toB64(chunk)}`);
   return {
     frames,
-    session: `${PROTOCOL.slice(2)}:${session}`,
     compressed: encoded.compressed,
     originalBytes: encoded.originalBytes,
     transferBytes: payload.length,
@@ -1277,7 +1272,7 @@ const qrScratchContext = qrScratch.getContext('2d');
 function paintQr(frame) {
   if (qrScratch.width !== frame.dim) qrScratch.width = qrScratch.height = frame.dim;
   qrScratchContext.putImageData(frame.image, 0, 0);
-  const cssTarget = Math.max(175, Math.min(230, window.innerWidth * 0.6, window.innerHeight * 0.34));
+  const cssTarget = Math.max(210, Math.min(350, window.innerWidth - 70, window.innerHeight - 330));
   const dpr = window.devicePixelRatio || 1;
   const scale = Math.max(2, Math.floor(cssTarget * dpr / frame.dim));
   const pixels = frame.dim * scale;
@@ -1289,19 +1284,11 @@ function paintQr(frame) {
 
 let senderFrames = [];
 let senderIndex = 0;
-let senderTick = 0;
-let senderAckFrame = null;
 let senderRaf = 0;
 let senderLastFrame = 0;
 let wakeLock = null;
-let outboundSession = null;
-let peerConfirmedReceipt = false;
-let receivedResult = null;
-let completionTimer = 0;
 let completionAudioContext = null;
-let syncSetupGeneration = 0;
 let lastAlignmentTone = 0;
-let alignmentLostTimer = 0;
 
 async function requestWakeLock() {
   try { wakeLock = await navigator.wakeLock?.request('screen'); } catch {}
@@ -1347,23 +1334,12 @@ function playCompletionBeep() {
   playFeedbackTone(880, 0.2, 0.16);
 }
 
-function markFrameLock() {
+function signalValidFrame() {
   const now = performance.now();
   if (now - lastAlignmentTone < 280) return;
   lastAlignmentTone = now;
-  $('#duplexStage').classList.add('frame-locked');
-  $('#alignmentText').textContent = 'Frame lock · keep the phones still';
-  clearTimeout(alignmentLostTimer);
-  alignmentLostTimer = setTimeout(clearFrameLock, 720);
   playFeedbackTone(620, 0.045, 0.045);
   try { navigator.vibrate?.(12); } catch {}
-}
-
-function clearFrameLock() {
-  clearTimeout(alignmentLostTimer);
-  alignmentLostTimer = 0;
-  $('#duplexStage').classList.remove('frame-locked');
-  $('#alignmentText').textContent = 'Adjust until you hear rapid ticks';
 }
 
 function senderLoop(timestamp) {
@@ -1371,45 +1347,23 @@ function senderLoop(timestamp) {
   senderRaf = requestAnimationFrame(senderLoop);
   if (timestamp - senderLastFrame < 1000 / SYNC_FPS) return;
   senderLastFrame = timestamp;
-  const showAcknowledgement = senderAckFrame && senderTick % 4 === 3;
-  if (showAcknowledgement) {
-    paintQr(senderAckFrame);
-  } else {
-    paintQr(senderFrames[senderIndex]);
-    senderIndex = (senderIndex + 1) % senderFrames.length;
-  }
-  senderTick++;
+  paintQr(senderFrames[senderIndex]);
+  senderIndex = (senderIndex + 1) % senderFrames.length;
 }
 
-async function startFaceToFace() {
-  setSyncView('duplex');
+async function startSender() {
+  setSyncView('send');
   stopSyncActivity();
-  const setupGeneration = syncSetupGeneration;
-  resetDuplexState();
-  armCompletionBeep();
   $('#syncQr').hidden = true;
   $('#qrLoading').hidden = false;
-  $('#qrLoading').textContent = 'Preparing moving code…';
-  $('#duplexTitle').textContent = 'Starting face-to-face sync…';
-  $('#sendStatus').textContent = 'Preparing your chats and front camera…';
-  $('#scanStatus').textContent = 'Starting front camera…';
+  $('#qrLoading').textContent = 'Preparing sync code…';
+  $('#sendStatus').textContent = 'Preparing chats…';
 
-  let requestedCamera;
   try {
-    requestedCamera = openCamera();
-    const setup = Promise.all([loadQrLibrary(), buildSyncFrames(), chooseDecoder()]);
-    const [stream, [, bundle]] = await Promise.all([requestedCamera, setup]);
-    if (setupGeneration !== syncSetupGeneration) {
-      stream.getTracks().forEach(track => track.stop());
-      return;
-    }
-    cameraStream = stream;
-    syncVideo.srcObject = cameraStream;
-    await syncVideo.play();
+    await loadQrLibrary();
+    const bundle = await buildSyncFrames();
     senderFrames = bundle.frames.map(rasterizeQr);
-    outboundSession = bundle.session;
     senderIndex = 0;
-    senderTick = 0;
     senderLastFrame = 0;
     $('#qrLoading').hidden = true;
     $('#syncQr').hidden = false;
@@ -1418,32 +1372,11 @@ async function startFaceToFace() {
     const frameLabel = `${senderFrames.length} frame${senderFrames.length === 1 ? '' : 's'}`;
     $('#sendStatus').textContent =
       `${chatLabel} · ${messageLabel} · ${frameLabel}${bundle.compressed ? ' · compressed' : ''}`;
-    $('#duplexTitle').textContent = 'Align the top edges and listen';
-    $('#scanStatus').textContent = 'Looking for the other phone…';
-    paintQr(senderFrames[0]);
-    senderIndex = senderFrames.length > 1 ? 1 : 0;
-    scannerGeneration++;
-    scannerBusy = false;
-    scannerLastDecode = 0;
     requestWakeLock();
     senderRaf = requestAnimationFrame(senderLoop);
-    scannerRaf = requestAnimationFrame(scanLoop);
   } catch (error) {
-    if (setupGeneration !== syncSetupGeneration) {
-      requestedCamera?.then(stream => stream.getTracks().forEach(track => track.stop())).catch(() => {});
-      return;
-    }
-    stopSyncActivity();
-    if (requestedCamera && !cameraStream)
-      requestedCamera.then(stream => stream.getTracks().forEach(track => track.stop())).catch(() => {});
-    $('#syncQr').hidden = true;
-    $('#qrLoading').hidden = false;
-    $('#qrLoading').textContent = 'Could not start face-to-face sync';
-    $('#duplexTitle').textContent = 'Setup stopped';
-    $('#sendStatus').textContent = error?.name === 'NotAllowedError'
-      ? 'Allow front-camera access on both phones, then try again.'
-      : error?.message || 'Check this phone’s connection and try again.';
-    $('#scanStatus').textContent = 'No transfer is running';
+    $('#qrLoading').textContent = error.message;
+    $('#sendStatus').textContent = 'Check this phone’s connection and try again.';
   }
 }
 
@@ -1466,7 +1399,6 @@ let receiveChunks = new Map();
 let receiveFinishing = false;
 
 async function chooseDecoder() {
-  if (decoderMode) return;
   if ('BarcodeDetector' in window) {
     try {
       const formats = await BarcodeDetector.getSupportedFormats();
@@ -1483,20 +1415,15 @@ async function chooseDecoder() {
 }
 
 async function openCamera() {
-  if (!navigator.mediaDevices?.getUserMedia)
-    throw new Error('This browser cannot open a camera. Use HTTPS or localhost.');
   const attempts = [
-    { video: { facingMode: { exact: 'user' }, width: { ideal: 1280 }, frameRate: { ideal: 30 } }, audio: false },
-    { video: { facingMode: 'user', width: { ideal: 1280 } }, audio: false },
-    { video: { facingMode: 'user' }, audio: false }
+    { video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 } }, audio: false },
+    { video: { facingMode: { ideal: 'environment' } }, audio: false },
+    { video: true, audio: false }
   ];
   let lastError;
   for (const constraints of attempts) {
     try { return await navigator.mediaDevices.getUserMedia(constraints); }
-    catch (error) {
-      lastError = error;
-      if (error?.name === 'NotAllowedError' || error?.name === 'SecurityError') throw error;
-    }
+    catch (error) { lastError = error; }
   }
   throw lastError;
 }
@@ -1521,31 +1448,12 @@ function updateScanProgress() {
   const total = receiveTotal;
   $('#scanCount').textContent = `${count} / ${total || 0}`;
   $('#scanProgress').style.width = total ? `${100 * count / total}%` : '0%';
-  $('#scanStatus').textContent = receivedResult
-    ? 'Chats received · confirming the other phone…'
-    : total
-      ? peerConfirmedReceipt
-        ? 'They received yours · receiving theirs…'
-        : 'Receiving their chats…'
-      : peerConfirmedReceipt
-        ? 'They received yours · looking for theirs…'
-        : 'Looking for the other phone…';
+  $('#scanStatus').textContent = total ? 'Receiving chats…' : 'Looking for sync code…';
 }
 
 const FRAME_RE = /^NC([2345])\|([a-z0-9]{6})\|([a-z0-9]+)\|([a-z0-9]+)\|([A-Za-z0-9+/=]*)$/;
-const ACK_RE = /^NCA\|([2345]:[a-z0-9]{6})$/;
 
 function ingestFrame(raw) {
-  const acknowledgement = ACK_RE.exec(raw);
-  if (acknowledgement) {
-    markFrameLock();
-    if (acknowledgement[1] === outboundSession && !peerConfirmedReceipt) {
-      peerConfirmedReceipt = true;
-      updateScanProgress();
-      maybeFinishFaceSync();
-    }
-    return;
-  }
   const match = FRAME_RE.exec(raw);
   if (!match || receiveFinishing) return;
   const session = `${match[1]}:${match[2]}`;
@@ -1553,7 +1461,7 @@ function ingestFrame(raw) {
   const total = parseInt(match[4], 36);
   if (!Number.isInteger(index) || !Number.isInteger(total) ||
       total < 1 || index < 0 || index >= total || total > 10000) return;
-  markFrameLock();
+  signalValidFrame();
 
   if (session !== receiveSession) {
     receiveSession = session;
@@ -1689,11 +1597,20 @@ async function finishReceive() {
     }
     const payload = JSON.parse(new TextDecoder().decode(payloadBytes));
     const result = mergeConversations(payload);
-    receivedResult = result;
-    senderAckFrame = rasterizeQr(`NCA|${receiveSession}`);
-    updateScanProgress();
-    showToast('Chats received · confirming both phones');
-    maybeFinishFaceSync();
+    stopScanner();
+    const additions = [];
+    if (result.chatsAdded)
+      additions.push(`${result.chatsAdded} new chat${result.chatsAdded === 1 ? '' : 's'}`);
+    if (result.messagesAdded)
+      additions.push(`${result.messagesAdded} new message${result.messagesAdded === 1 ? '' : 's'}`);
+    $('#doneText').textContent = additions.length
+      ? `${additions.join(' and ')} received. Send back to finish a two-way sync.`
+      : result.chatsReceived === 1
+        ? 'The transferred chat is already up to date. You can still sync back to confirm.'
+        : 'The transferred chats are already up to date. You can still sync back to confirm.';
+    setSyncView('done');
+    playCompletionBeep();
+    showToast(additions.length ? additions.join(' · ') : 'Already in sync');
   } catch (error) {
     receiveSession = null;
     receiveProtocol = 0;
@@ -1703,29 +1620,6 @@ async function finishReceive() {
     updateScanProgress();
     $('#scanStatus').textContent = error.message;
   }
-}
-
-function maybeFinishFaceSync() {
-  if (!receivedResult || !peerConfirmedReceipt || completionTimer) return;
-  $('#duplexTitle').textContent = 'Both phones confirmed';
-  $('#scanStatus').textContent = 'Finishing together…';
-  $('#scanProgress').style.width = '100%';
-  completionTimer = setTimeout(() => {
-    const result = receivedResult;
-    completionTimer = 0;
-    const additions = [];
-    if (result.chatsAdded)
-      additions.push(`${result.chatsAdded} new chat${result.chatsAdded === 1 ? '' : 's'}`);
-    if (result.messagesAdded)
-      additions.push(`${result.messagesAdded} new message${result.messagesAdded === 1 ? '' : 's'}`);
-    $('#doneText').textContent = additions.length
-      ? `${additions.join(' and ')} received. Both phones confirmed the two-way transfer.`
-      : 'Both phones already had the same chats and confirmed the transfer.';
-    stopSyncActivity();
-    setSyncView('done');
-    playCompletionBeep();
-    showToast('Two-way sync complete');
-  }, 1800);
 }
 
 function scanLoop(timestamp) {
@@ -1753,21 +1647,35 @@ function scanLoop(timestamp) {
   scannerBusy = false;
 }
 
-function resetDuplexState() {
-  clearTimeout(completionTimer);
-  completionTimer = 0;
-  outboundSession = null;
-  peerConfirmedReceipt = false;
-  receivedResult = null;
-  senderAckFrame = null;
+async function startScanner() {
+  setSyncView('scan');
+  stopSyncActivity();
+  armCompletionBeep();
   lastAlignmentTone = 0;
-  clearFrameLock();
   receiveSession = null;
   receiveProtocol = 0;
   receiveTotal = 0;
   receiveChunks = new Map();
   receiveFinishing = false;
   updateScanProgress();
+  $('#scanStatus').textContent = 'Starting camera…';
+
+  try {
+    await chooseDecoder();
+    cameraStream = await openCamera();
+    syncVideo.srcObject = cameraStream;
+    await syncVideo.play();
+    scannerGeneration++;
+    scannerBusy = false;
+    scannerLastDecode = 0;
+    requestWakeLock();
+    scannerRaf = requestAnimationFrame(scanLoop);
+    $('#scanStatus').textContent = 'Looking for sync code…';
+  } catch (error) {
+    stopScanner();
+    $('#scanStatus').textContent =
+      error?.name === 'NotAllowedError' ? 'Camera access is needed to scan.' : 'Could not start the camera.';
+  }
 }
 
 function stopScanner() {
@@ -1777,28 +1685,24 @@ function stopScanner() {
   cameraStream = null;
   syncVideo.srcObject = null;
   scannerBusy = false;
-  clearFrameLock();
   releaseWakeLock();
 }
 
 function stopSender() {
   cancelAnimationFrame(senderRaf);
   senderFrames = [];
-  senderAckFrame = null;
   releaseWakeLock();
 }
 
 function stopSyncActivity() {
-  syncSetupGeneration++;
-  clearTimeout(completionTimer);
-  completionTimer = 0;
   stopSender();
   stopScanner();
 }
 
 const syncViews = {
   choose: $('#syncChoose'),
-  duplex: $('#syncDuplex'),
+  send: $('#syncSend'),
+  scan: $('#syncScan'),
   done: $('#syncDone')
 };
 
@@ -1809,13 +1713,13 @@ function setSyncView(name) {
 function updateSyncScopeUi() {
   const openOnly = appSettings.syncOpenChatOnly;
   const hasOpenChat = Boolean(activeChat());
-  $('#faceSyncTitle').textContent = openOnly ? 'Sync this chat face to face' : 'Sync all chats face to face';
-  $('#startFaceSync').disabled = openOnly && !hasOpenChat;
+  $('#showCodeTitle').textContent = openOnly ? 'Show this chat' : 'Show all chats';
+  $('#showCode').disabled = openOnly && !hasOpenChat;
   $('#syncScopeCopy').textContent = openOnly
     ? hasOpenChat
-      ? 'Both phones show and scan at once. This sync sends only the open chat from this phone.'
-      : 'Open a chat before starting while the open-chat-only setting is on.'
-    : 'Both phones show and scan all chats at the same time using their front cameras.';
+      ? 'Put the phones near each other. This sync will send only the open chat.'
+      : 'Open a chat to send only it. You can still scan chats from the other phone.'
+    : 'Put the phones near each other. One phone shows all chats; the other scans them.';
 }
 
 function openSync() {
@@ -1826,7 +1730,6 @@ function openSync() {
 
 function closeSync() {
   stopSyncActivity();
-  resetDuplexState();
   closeOverlay($('#syncOverlay'));
   setSyncView('choose');
   if (!$('#conversationScreen').hidden) return;
@@ -1839,12 +1742,11 @@ $('#closeSync').addEventListener('click', closeSync);
 $('#syncOverlay').addEventListener('click', event => {
   if (event.target === $('#syncOverlay')) closeSync();
 });
-$('#startFaceSync').addEventListener('click', startFaceToFace);
-$('#backFromDuplex').addEventListener('click', () => {
-  stopSyncActivity();
-  resetDuplexState();
-  setSyncView('choose');
-});
+$('#showCode').addEventListener('click', startSender);
+$('#scanCode').addEventListener('click', startScanner);
+$('#backFromSend').addEventListener('click', () => { stopSender(); setSyncView('choose'); });
+$('#backFromScan').addEventListener('click', () => { stopScanner(); setSyncView('choose'); });
+$('#syncBack').addEventListener('click', startSender);
 $('#finishSync').addEventListener('click', closeSync);
 
 document.addEventListener('keydown', event => {
